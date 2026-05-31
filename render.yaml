@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: ndvi-iracemapolis
+    runtime: python
+    plan: free
+    buildCommand: ""
+    startCommand: "python3 ndvi-proxy.py"
+    envVars:
+      - key: SH_CLIENT_ID
+        sync: false
+      - key: SH_CLIENT_SECRET
+        sync: false

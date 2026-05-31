@@ -25,7 +25,8 @@ Endpoints (uso interno do app):
 import json, os, time, urllib.request, urllib.parse, urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PORT = 8799
+PORT = int(os.environ.get("PORT", "8799"))
+HOST = "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"  # nuvem (Render) usa $PORT e 0.0.0.0; local fica em 127.0.0.1
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
 PROCESS_URL = "https://sh.dataspace.copernicus.eu/process/v1"
@@ -376,4 +377,4 @@ if __name__ == "__main__":
     print(" Credencial:", "OK (validada)" if valid else ("encontrada, mas nao validou" if cid else "NAO configurada"))
     print(" Deixe esta janela aberta enquanto usa o app.")
     print("=" * 56)
-    ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
+    ThreadingHTTPServer((HOST, PORT), H).serve_forever()

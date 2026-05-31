@@ -1,0 +1,1 @@
+# sem dependencias externas — o proxy usa so a biblioteca padrao do Python
