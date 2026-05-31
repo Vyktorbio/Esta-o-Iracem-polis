@@ -1072,11 +1072,12 @@ function updateAgendaBadge(){
 /* ===== NDVI / NDRE / GNDVI (Sentinel-2 via proxy local) ===== */
 var NDVI_PROXY='https://ndvi-iracemapolis.onrender.com';
 var ndviIndex=null, ndviDate=null, ndviOverlay=null, ndviOpacity=0.78, ndviClip=true, ndviMeans=null;
+var ndviArea='quadras'; /* 'quadras' = área das quadras da Plantec | 'view' = área visível do mapa (GPS / outras estações) */
 function pointInRing(x,y,ring){ var inside=false,i,j;
   for(i=0,j=ring.length-1;i<ring.length;j=i++){ var xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
     if(((yi>y)!=(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
 function computeQuadraMeans(){
-  var bb=stationBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
+  var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width=1024&raw=1')
    .then(function(r){ return r.ok?r.blob():null; })
    .then(function(blob){ if(!blob) return;
@@ -1123,11 +1124,32 @@ function quadrasMultiPolygon(){
   return { type:"MultiPolygon", coordinates: polys };
 }
 function ndviSetClip(v){ ndviClip=!!v; ndviLoadImage(); }
+function ndviSetArea(a){
+  if(a===ndviArea){ buildNdviPanel(); return; }
+  ndviArea=a;
+  if(a==='view') ndviClip=false; /* fora das quadras não há recorte */
+  buildNdviPanel();
+  ndviStatus(a==='view'?'Modo "onde estou": mova o mapa (ou 📍 GPS) e toque em "Carregar aqui".':'Modo quadras (Plantec).');
+  ndviLoadDates();
+  if(ndviIndex && ndviDate) ndviLoadImage();
+}
+function ndviReloadArea(){ ndviLoadDates(); if(ndviIndex && ndviDate) ndviLoadImage(); else ndviStatus('Escolha um índice (NDVI/NDRE/GNDVI) e uma data.'); }
 function stationBBox(){
   ensureQGEO(); var a=99,b=999,c=-99,d=-999;
   Object.keys(QGEO||{}).forEach(function(id){ QGEO[id].forEach(function(p){ if(p[0]<a)a=p[0]; if(p[0]>c)c=p[0]; if(p[1]<b)b=p[1]; if(p[1]>d)d=p[1]; }); });
   var ml=(c-a)*0.06, mg=(d-b)*0.06;
   return [b-mg, a-ml, d+mg, c+ml]; /* w,s,e,n */
+}
+/* BBox usado pelo NDVI: 'quadras' = Plantec; 'view' = o que está visível no mapa (qualquer lugar, via GPS) */
+function ndviBBox(){
+  if(ndviArea==='view' && _map){
+    var b=_map.getBounds(), w=b.getWest(), s=b.getSouth(), e=b.getEast(), n=b.getNorth();
+    var cx=(w+e)/2, cy=(s+n)/2, maxSpan=0.25; /* ~27 km — evita pedido gigante/baixa resolução */
+    if(e-w>maxSpan){ w=cx-maxSpan/2; e=cx+maxSpan/2; }
+    if(n-s>maxSpan){ s=cy-maxSpan/2; n=cy+maxSpan/2; }
+    return [w,s,e,n];
+  }
+  return stationBBox();
 }
 function ndviStatus(msg, kind){ var el=document.getElementById('ndviStatus'); if(el){ el.textContent=msg||''; el.style.color=kind==='err'?'#ff8a80':(kind==='ok'?'#9ac49a':'#9ab39a'); } }
 var ndviProbe=false, _gpsMarker=null;
@@ -1161,13 +1183,14 @@ function locateMe(){
     _gpsMarker=LF.marker(ll,{icon:LF.divIcon({className:'gps-dot',html:'<div></div>',iconSize:[20,20],iconAnchor:[10,10]})}).addTo(_map);
     _gpsMarker.bindPopup('📍 Você está aqui'+(pos.coords.accuracy?' (±'+Math.round(pos.coords.accuracy)+' m)':'')).openPopup();
     _map.setView(ll, Math.max(_map.getZoom()||16,17));
+    if(ndviArea==='view' && ndviIndex && ndviDate){ setTimeout(function(){ try{ ndviReloadArea(); }catch(e){} }, 400); }
   }, function(err){ alert('Não consegui o GPS.\\nObs.: abrindo o arquivo direto (file://) o navegador bloqueia o GPS — funciona via localhost/https ou no app instalado.\\n('+err.message+')'); }, {enableHighAccuracy:true, timeout:10000, maximumAge:5000});
 }
 function toggleNdvi(){
   var p=document.getElementById('ndviPanel');
   if(p && p.style.display==='block'){ p.style.display='none'; return; }
   if(!_map) initMap();
-  if(!ensureQGEO()){ alert('Alinhe o mapa primeiro (botão "Alinhar").'); return; }
+  ensureQGEO(); /* não bloqueia: o NDVI também funciona fora das quadras (modo "onde estou") */
   buildNdviPanel(); ndviCheckProxy();
 }
 function buildNdviPanel(){
@@ -1176,10 +1199,12 @@ function buildNdviPanel(){
   function btn(ix){ return '<button class="ndvi-ix'+(ndviIndex===ix?' on':'')+'" onclick="ndviSetIndex(\''+ix+'\')">'+ix+'</button>'; }
   p.innerHTML='<div class="gr-title">🛰️ ÍNDICES (Sentinel-2)</div>'+
     '<div class="ndvi-ixrow">'+btn('NDVI')+btn('NDRE')+btn('GNDVI')+'<button class="ndvi-ix" onclick="ndviClear()">Nenhum</button></div>'+
+    '<div class="ndvi-ixrow" style="margin-top:4px"><button class="ndvi-ix'+(ndviArea==='quadras'?' on':'')+'" style="flex:1" onclick="ndviSetArea(\'quadras\')" title="Área das quadras da Plantec">🏠 Quadras</button><button class="ndvi-ix'+(ndviArea==='view'?' on':'')+'" style="flex:1" onclick="ndviSetArea(\'view\')" title="Usar a área visível do mapa — funciona em qualquer lugar (GPS / outras estações)">🌍 Onde estou</button></div>'+
+    (ndviArea==='view'?'<div class="gr-btns" style="margin:4px 0 2px"><button class="ndvi-ix" style="flex:1" onclick="locateMe()">📍 Ir pro meu GPS</button><button class="ndvi-ix" style="flex:1" onclick="ndviReloadArea()" title="Recarregar o índice depois de mover o mapa">🔄 Carregar aqui</button></div>':'')+
     '<label class="gr-ctl"><span>Data</span><input type="date" id="ndviDateInput" max="'+todayISO()+'"'+(ndviDate?' value="'+ndviDate+'"':'')+' onchange="ndviSetDate(this.value)"></label>'+
     '<label class="gr-ctl"><span>Sugestões</span><select id="ndviDateSel" onchange="ndviSetDate(this.value)"><option value="">datas com imagem…</option></select></label>'+
     '<label class="gr-ctl"><span>Opacidade</span><input type="range" min="0.2" max="1" step="0.05" value="'+ndviOpacity+'" oninput="ndviSetOpacity(this.value)"></label>'+
-    '<label class="gr-ctl" style="cursor:pointer"><span>Só nas quadras</span><input type="checkbox" '+(ndviClip?'checked':'')+' onchange="ndviSetClip(this.checked)" style="flex:none;width:auto"></label>'+
+    (ndviArea==='quadras'?'<label class="gr-ctl" style="cursor:pointer"><span>Só nas quadras</span><input type="checkbox" '+(ndviClip?'checked':'')+' onchange="ndviSetClip(this.checked)" style="flex:none;width:auto"></label>':'')+
     '<div class="ndvi-legend"><span>baixo</span><i class="ndvi-bar"></i><span>alto</span></div>'+
     '<div class="ndvi-ticks"><span>-0.2</span><span>0.2</span><span>0.5</span><span>0.8</span></div>'+
     '<div class="gr-btns" style="margin:6px 0 2px"><button class="ndvi-ix'+(ndviProbe?' on':'')+'" style="flex:1" onclick="ndviToggleProbe()">🔎 '+(ndviProbe?'Consultando — clique no mapa':'Consultar ponto')+'</button></div>'+
@@ -1196,7 +1221,7 @@ function ndviCheckProxy(){
   }).catch(function(){ ndviStatus('Proxy desligado. No Terminal: python3 ndvi-proxy.py','err'); });
 }
 function ndviLoadDates(){
-  var bb=stationBBox(), to=todayISO();
+  var bb=ndviBBox(), to=todayISO();
   var dt=new Date(); dt.setMonth(dt.getMonth()-6);
   var from=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
   ndviStatus('Buscando datas disponíveis…');
@@ -1214,7 +1239,7 @@ function ndviSetOpacity(v){ ndviOpacity=parseFloat(v); if(ndviOverlay) ndviOverl
 function ndviClear(){ ndviIndex=null; ndviMeans=null; if(ndviOverlay){ _map.removeLayer(ndviOverlay); ndviOverlay=null; } buildNdviPanel(); ndviCheckProxy(); render(); }
 function ndviLoadImage(){
   if(!ndviIndex || !ndviDate) return;
-  var bb=stationBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
+  var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   ndviStatus('Carregando '+ndviIndex+' de '+ndviDate+'…');
   fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width=1024')
    .then(function(r){ if(r.ok) return r.blob(); return r.json().then(function(j){ throw (j.error||'erro'); }); })
@@ -1222,7 +1247,7 @@ function ndviLoadImage(){
      var bu=URL.createObjectURL(blob), img=new Image();
      img.onload=function(){
        var iw=img.naturalWidth||1024, ih=img.naturalHeight||1024, url=bu;
-       if(ndviClip){
+       if(ndviClip && ndviArea==='quadras'){
          try{
            var cv=document.createElement('canvas'); cv.width=iw; cv.height=ih;
            var ctx=cv.getContext('2d'); ctx.beginPath();
@@ -1237,7 +1262,7 @@ function ndviLoadImage(){
        if(ndviOverlay) _map.removeLayer(ndviOverlay);
        ndviOverlay=LF.imageOverlay(url,[[s,w],[n,e]],{opacity:ndviOpacity}).addTo(_map);
        ndviOverlay.bringToFront();
-       ndviStatus(ndviIndex+' • '+ndviDate+(ndviClip?' (só nas quadras)':''),'ok');
+       ndviStatus(ndviIndex+' • '+ndviDate+((ndviClip&&ndviArea==='quadras')?' (só nas quadras)':(ndviArea==='view'?' (área visível)':'')),'ok');
        computeQuadraMeans();
      };
      img.onerror=function(){ ndviStatus('Erro ao carregar a imagem.','err'); };

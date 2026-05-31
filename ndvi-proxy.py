@@ -254,6 +254,10 @@ def do_dates(bbox, frm, to):
                         "evalscript": evalscript, "resx": 60, "resy": 60},
         "calculations": {"idx": {"statistics": {"default": {}}}},
     }
+    # resx/resy estao em graus (CRS84). ~0.0045 deg ~= 500 m/px: bem abaixo do limite de 1500 m/px
+    # da colecao S2L2A e suficiente para detectar disponibilidade/nuvem em qualquer area.
+    payload["aggregation"]["resx"] = min(0.0045, max(1e-5, e - w))
+    payload["aggregation"]["resy"] = min(0.0045, max(1e-5, n - s))
     raw, _ = api_post(STATS_URL, payload, "application/json")
     d = json.loads(raw.decode())
     best = {}
