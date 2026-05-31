@@ -445,6 +445,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <script src="vendor/leaflet.js"></script>
 <script src="vendor/Leaflet.ImageOverlay.Rotated.js"></script>
 <script src="vendor/quadras-default.js"></script>
+<script src="vendor/supabase.js"></script>
 <script>window.LF=window.L;/* Leaflet alias: o app reusa 'L' para rótulos */</script>
 <script>
 var P={"F1": [[604, 158], [760, 150], [761, 317], [586, 318]], "E7": [[796, 149], [852, 148], [807, 317], [791, 317]], "E6": [[867, 149], [903, 147], [877, 317], [823, 318]], "E5": [[924, 146], [975, 147], [954, 314], [899, 317]], "E4": [[996, 150], [1047, 146], [1013, 316], [972, 316]], "E3": [[1072, 147], [1111, 144], [1098, 310], [1031, 313]], "E2": [[1130, 141], [1150, 142], [1144, 312], [1117, 314]], "H2": [[129, 402], [239, 370], [254, 555], [151, 582]], "H1": [[258, 359], [345, 342], [341, 540], [271, 554]], "D3": [[405, 340], [565, 338], [553, 524], [415, 521]], "D2": [[580, 339], [707, 338], [622, 528], [571, 527]], "D1": [[723, 338], [762, 336], [766, 520], [641, 528]], "C6": [[803, 337], [878, 334], [796, 520], [790, 520]], "C5": [[894, 335], [950, 330], [887, 519], [813, 523]], "C4": [[964, 336], [1008, 333], [974, 518], [901, 520]], "C3": [[1024, 333], [1087, 332], [1063, 517], [988, 517]], "C2": [[1106, 331], [1153, 328], [1146, 512], [1084, 515]], "C1": [[1170, 330], [1193, 329], [1211, 503], [1160, 512]], "B4": [[365, 559], [549, 549], [499, 741], [367, 753]], "B2": [[630, 549], [704, 545], [629, 742], [582, 747]], "B1": [[718, 545], [777, 544], [782, 732], [646, 736]], "A5": [[796, 542], [876, 540], [811, 730], [801, 731]], "A4": [[895, 541], [965, 536], [908, 725], [831, 730]], "A3": [[982, 537], [1063, 533], [1046, 719], [926, 730]], "A2": [[1078, 534], [1145, 533], [1172, 717], [1068, 721]], "A1": [[1156, 530], [1215, 531], [1230, 710], [1190, 715]], "F2": [[432, 134], [600, 155], [586, 318], [420, 300]], "H3": [[8, 400], [125, 388], [110, 582], [2, 598]], "G1": [[130, 598], [360, 560], [350, 752], [118, 800]], "D4": [[350, 340], [400, 338], [405, 524], [355, 525]], "B3": [[468, 555], [555, 550], [540, 745], [460, 750]]};
@@ -589,6 +590,7 @@ function save(){
       alert("⚠ Falha ao salvar localmente.\n\n"+e.message+"\n\nSuas edições não estão sendo persistidas. Faça BACKUP agora (💾) e recarregue o app.");
     }
   }
+  if(typeof cloudSaveSoon==='function') cloudSaveSoon();
 }
 
 /* ============ STUDY UTILS ============ */
@@ -697,7 +699,7 @@ function loadGeoref(){
     return g.H?g:null;
   }catch(e){ return null; }
 }
-function saveGeoref(g){ try{ localStorage.setItem(GEOREF_KEY, JSON.stringify(g)); }catch(e){} }
+function saveGeoref(g){ try{ localStorage.setItem(GEOREF_KEY, JSON.stringify(g)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }
 function pxToLL(x,y){ var H=_geo.H, w=H[6]*x+H[7]*y+H[8];
   return [ (H[3]*x+H[4]*y+H[5])/w, (H[0]*x+H[1]*y+H[2])/w ]; }
 function geoBounds(g){ return LF.latLngBounds(g.corners); }
@@ -804,7 +806,7 @@ function hideGrPanel(){ var p=document.getElementById('grPanel'); if(p)p.style.d
 /* ===== Geometria das quadras em lat/lng (editavel) + EDITOR ===== */
 var QGEO_KEY="iracema-qgeo-v1", QGEO=null;
 function loadQGEO(){ try{ var s=localStorage.getItem(QGEO_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
-function saveQGEO(){ try{ localStorage.setItem(QGEO_KEY, JSON.stringify(QGEO)); }catch(e){} }
+function saveQGEO(){ try{ localStorage.setItem(QGEO_KEY, JSON.stringify(QGEO)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }
 function buildQGEOfromP(){ QGEO={}; Object.keys(P).forEach(function(id){ QGEO[id]=P[id].map(function(v){ return pxToLL(v[0],v[1]); }); }); }
 function ensureQGEO(){
   if(!QGEO){
@@ -899,6 +901,49 @@ function buildEditPanel(){
       '<div class="gr-btns"><button class="gr-ok" onclick="startDrawQuadra()">&#43; Nova quadra</button><button class="gr-cancel" onclick="toggleQuadraEdit()">Concluir</button></div>';
   }
   p.innerHTML=html; p.style.display='block';
+}
+
+/* ===== Nuvem (Supabase): dados compartilhados + tempo real ===== */
+var SUPABASE_URL='https://atgmvbdcknslpmnjvnia.supabase.co';
+var SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Z212YmRja25zbHBtbmp2bmlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjY3ODUsImV4cCI6MjA5NTgwMjc4NX0.KK_G_ulSGXk770gTJWkEQ2R4JY0Ua1--0iOMNGRzQWg';
+var SB=null, _cloudApplying=false, _cloudTimer=null;
+function cloudInit(){ if(SB) return SB; try{ if(window.supabase && SUPABASE_URL) SB=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }catch(e){ SB=null; } return SB; }
+function cloudState(){ ensureQGEO(); return { data:data, qgeo:QGEO, georef:_geo }; }
+function cloudApply(st){
+  if(!st) return;
+  _cloudApplying=true;
+  try{
+    if(st.data && typeof st.data==='object'){ data=st.data; try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} }
+    if(st.qgeo && typeof st.qgeo==='object'){ QGEO=st.qgeo; saveQGEO(); }
+    if(st.georef){ _geo=st.georef; saveGeoref(_geo); }
+    if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]}; }); }
+    render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
+  }catch(e){}
+  _cloudApplying=false;
+}
+function cloudSave(){
+  if(!cloudInit() || _cloudApplying) return;
+  try{ SB.from('app_state').update({ state: cloudState(), updated_at: new Date().toISOString() }).eq('id',1).then(function(){},function(){}); }catch(e){}
+}
+function cloudSaveSoon(){ if(_cloudApplying) return; clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
+function cloudSubscribe(){
+  if(!SB) return;
+  try{
+    SB.channel('app_state_rt').on('postgres_changes', {event:'UPDATE', schema:'public', table:'app_state'}, function(p){
+      if(p && p.new && p.new.state) cloudApply(p.new.state);
+    }).subscribe();
+  }catch(e){}
+}
+function cloudStart(){
+  if(!cloudInit()) return;
+  try{
+    SB.from('app_state').select('state').eq('id',1).single().then(function(res){
+      var st = res && res.data && res.data.state;
+      if(st && st.data && Object.keys(st.data).length){ cloudApply(st); }
+      else { cloudSave(); }
+      cloudSubscribe();
+    }, function(){});
+  }catch(e){}
 }
 
 function render(){
@@ -2814,6 +2859,7 @@ function init(){
     document.getElementById("dateInfo").textContent=new Date().toLocaleDateString("pt-BR",{day:"numeric",month:"short",year:"numeric"});
     render();
   injectTopbarButtons();updateTodayBadge();renderLeg();updateAgendaBadge();
+  if(typeof cloudStart==='function') cloudStart();
   }catch(e){
     var b=document.createElement('div');
     b.style.cssText='position:fixed;top:50px;left:8px;right:8px;background:#300;color:#fff;padding:10px;z-index:9999;font:12px monospace;border:1px solid #f55;border-radius:6px;white-space:pre-wrap';

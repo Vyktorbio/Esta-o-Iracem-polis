@@ -2,12 +2,12 @@
    - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
    - Estáticos (vendor, ícones): cache-first
    - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
-var CACHE = 'iracema-app-v2';
+var CACHE = 'iracema-app-v3';
 var ASSETS = [
   './', './index.html',
   './vendor/leaflet.js', './vendor/leaflet.css',
   './vendor/Leaflet.ImageOverlay.Rotated.js',
-  './vendor/quadras-default.js',
+  './vendor/quadras-default.js', './vendor/supabase.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png'
 ];
 self.addEventListener('install', function(e){
@@ -22,7 +22,7 @@ self.addEventListener('fetch', function(e){
   if(e.request.method !== 'GET') return;
   var u = new URL(e.request.url);
   /* Online sempre (sem cache): proxy NDVI, tiles do satélite e Copernicus */
-  if(u.port === '8799' || u.hostname.indexOf('onrender.com') >= 0 ||
+  if(u.port === '8799' || u.hostname.indexOf('onrender.com') >= 0 || u.hostname.indexOf('supabase.co') >= 0 ||
      u.hostname.indexOf('arcgisonline') >= 0 || u.hostname.indexOf('dataspace') >= 0) return;
   var isHTML = e.request.mode === 'navigate' || u.pathname.endsWith('/') || u.pathname.endsWith('index.html');
   if(isHTML){
