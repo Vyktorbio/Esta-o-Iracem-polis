@@ -1,5 +1,8 @@
-/* Service Worker — Estação Iracemápolis (offline do "casco" do app) */
-var CACHE = 'iracema-app-v1';
+/* Service Worker — Estação Iracemápolis
+   - HTML (navegação): network-first (sempre pega a versão nova online; cache só como reserva offline)
+   - Estáticos (vendor, ícones): cache-first
+   - Nunca intercepta o proxy NDVI / tiles do satélite / Copernicus */
+var CACHE = 'iracema-app-v2';
 var ASSETS = [
   './', './index.html',
   './vendor/leaflet.js', './vendor/leaflet.css',
@@ -18,13 +21,19 @@ self.addEventListener('activate', function(e){
 self.addEventListener('fetch', function(e){
   if(e.request.method !== 'GET') return;
   var u = new URL(e.request.url);
-  /* Online sempre: proxy NDVI (8799), tiles do satélite e API do Copernicus */
-  if(u.port === '8799' || u.hostname.indexOf('arcgisonline') >= 0 || u.hostname.indexOf('dataspace') >= 0) return;
-  e.respondWith(
-    caches.match(e.request).then(function(r){
-      return r || fetch(e.request).then(function(resp){
+  /* Online sempre (sem cache): proxy NDVI, tiles do satélite e Copernicus */
+  if(u.port === '8799' || u.hostname.indexOf('onrender.com') >= 0 ||
+     u.hostname.indexOf('arcgisonline') >= 0 || u.hostname.indexOf('dataspace') >= 0) return;
+  var isHTML = e.request.mode === 'navigate' || u.pathname.endsWith('/') || u.pathname.endsWith('index.html');
+  if(isHTML){
+    e.respondWith(
+      fetch(e.request).then(function(resp){
+        var copy = resp.clone();
+        caches.open(CACHE).then(function(c){ c.put('./index.html', copy); });
         return resp;
-      }).catch(function(){ return r; });
-    })
-  );
+      }).catch(function(){ return caches.match('./index.html').then(function(r){ return r || caches.match('./'); }); })
+    );
+    return;
+  }
+  e.respondWith(caches.match(e.request).then(function(r){ return r || fetch(e.request); }));
 });
