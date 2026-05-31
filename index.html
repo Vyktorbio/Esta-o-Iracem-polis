@@ -847,8 +847,9 @@ function toggleQuadraEdit(){
   if(!ensureQGEO()){ alert('Primeiro alinhe o mapa (bot\u00e3o "Alinhar") para gerar as quadras.'); return; }
   if(_grOn) cancelGeoref();
   editMode=!editMode; editId=null; endDraw();
+  window._qEditing=editMode; /* trava o eco do realtime enquanto edita (não atropela) */
   if(editMode){ if(!_editLayer) _editLayer=LF.layerGroup().addTo(_map); buildEditPanel(); }
-  else { editExitCleanup(); }
+  else { editExitCleanup(); cloudApplyPending(); }
   render();
 }
 function editExitCleanup(){ if(_editLayer) _editLayer.clearLayers(); _editPoly=null; var p=document.getElementById('edPanel'); if(p)p.style.display='none'; }
