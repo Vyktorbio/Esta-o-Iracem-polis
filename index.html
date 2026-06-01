@@ -461,6 +461,23 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 .ndvi-panel{top:auto;bottom:78px;left:12px;max-height:calc(100vh - 150px);overflow-y:auto}
 .gr-panel{max-height:calc(100vh - 40px);overflow-y:auto}
 
+/* ---- Multi-cultura ---- */
+.e-cult-row{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:9px 10px;margin-bottom:8px}
+.e-cult-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.e-cult-n{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--accent)}
+.e-cult-del{background:none;border:none;color:#9a6a6a;font-size:14px;cursor:pointer;padding:0 4px;line-height:1}
+.e-cult-del:hover{color:var(--danger)}
+.e-add-cult{width:100%;margin-top:2px;background:var(--accent-soft);color:var(--accent);border:1px dashed #2c5a3e;border-radius:9px;padding:9px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit}
+.e-add-cult:hover{background:#15301f}
+.cult-list{margin-top:12px;border-top:1px solid var(--border-soft);padding-top:10px}
+.cult-list-t{font-size:9px;color:var(--text-3);letter-spacing:1.5px;font-weight:700;margin-bottom:7px}
+.cult-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border-soft);margin-bottom:5px;font-size:12px}
+.cult-dot{width:8px;height:8px;border-radius:50%;flex:none}
+.cult-name{font-weight:700}
+.cult-cv{color:var(--text-2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cult-st{font-weight:700;font-size:11px;white-space:nowrap}
+.q-multi{display:inline-block;margin-left:3px;font-size:8px;font-weight:800;color:#cfe6cf;background:rgba(55,214,132,.25);border-radius:5px;padding:0 3px;vertical-align:top}
+
 /* ---- Scrollbars discretas ---- */
 *::-webkit-scrollbar{width:9px;height:9px}
 *::-webkit-scrollbar-thumb{background:#2a352e;border-radius:6px;border:2px solid transparent;background-clip:padding-box}
@@ -1308,7 +1325,8 @@ function render(){
     var nEst=(d.estudos||[]).length, inner='';
     if(hasAlert) inner+='<div class="q-alert"></div>';
     inner+='<div class="q-dot" style="background:'+st.c+'"></div>';
-    inner+='<div class="q-id">'+id+'</div>';
+    var _ncult=getCulturas(d).length;
+    inner+='<div class="q-id">'+id+(_ncult>=2?'<span class="q-multi">+'+(_ncult-1)+'</span>':'')+'</div>';
     inner+='<div class="q-st" style="color:'+st.c+'">'+esc(st.s)+'</div>';
     if(dapStr) inner+='<div class="q-dap">'+dapStr+'</div>';
     if(nEst>0){ var bc=hasAlert?'#ff5252':'#1e3a1e', bb=hasAlert?'#ff8a80':'#5a8a5a'; inner+='<div class="q-badge" style="background:'+bc+';border:1px solid '+bb+'">'+nEst+'</div>'; }
@@ -1671,6 +1689,18 @@ function showD(id){
      '<span title="Área calculada do polígono">&#128208; <b style="color:#9ac49a">'+(aHa!=null?aHa.toFixed(2)+' ha':'—')+'</b> <span style="color:#566">medida</span></span>'+
      (ctr?'<span title="Coordenadas do centro da quadra">&#128205; <b style="color:#9ac49a">'+ctr[0].toFixed(5)+', '+ctr[1].toFixed(5)+'</b></span>':'')+
      '</div>';
+  var _cs=getCulturas(d);
+  if(_cs.length>=2){
+    h+='<div class="cult-list"><div class="cult-list-t">CULTURAS ('+_cs.length+')</div>';
+    _cs.forEach(function(c){
+      var cdap=cDAP(c.plantio), cst=gS(c.cultura,cdap), cc=gC(c.cultura);
+      h+='<div class="cult-item"><span class="cult-dot" style="background:'+cc+'"></span>'+
+         '<span class="cult-name" style="color:'+cc+'">'+esc(c.cultura)+'</span>'+
+         (c.cultivar?'<span class="cult-cv">'+esc(c.cultivar)+'</span>':'')+
+         '<span class="cult-st" style="color:'+cst.c+'">'+esc(cst.s)+(cdap!=null?' · '+(cdap>=0?cdap+'d':'em '+Math.abs(cdap)+'d'):'')+'</span></div>';
+    });
+    h+='</div>';
+  }
   if(dap!==null&&dap>=0)h+='<div class="prog-wrap"><div class="prog-top"><span class="prog-t">PROGRESSO</span><span class="prog-p">'+Math.round(prog)+'%</span></div><div class="prog-bar"><div class="prog-fill" style="width:'+prog+'%;background:linear-gradient(90deg,'+ac+','+st.c+')"></div></div></div>';
 
   h+='<div class="fen-wrap"><div class="fen-title">FENOLOGIA</div><div class="fen-row">';
@@ -1748,21 +1778,61 @@ function renderStudyCard(qid,study){
 function closeDetail(){document.getElementById("dOvl").classList.remove("open");curV=null}
 
 /* ============ QUADRA EDIT ============ */
+/* ===== Multi-cultura: cada quadra pode ter 1+ culturas (cons\u00f3rcio/rota\u00e7\u00e3o) =====
+   data[id].culturas = [{cultura,cultivar,plantio}, ...]; a 1\u00aa \u00e9 a PRINCIPAL e espelha
+   cultura/cultivar/plantio (compat com cor/r\u00f3tulo/fenologia/agenda). */
+function getCulturas(d){
+  if(!d) return [];
+  if(Array.isArray(d.culturas) && d.culturas.length) return d.culturas.filter(function(c){return c&&c.cultura;});
+  if(d.cultura) return [{cultura:d.cultura, cultivar:d.cultivar||'', plantio:d.plantio||''}];
+  return [];
+}
+var _ecRows=[];
+function _ecOpts(sel){ var o='<option value="">\u2014 selecionar \u2014</option>'; for(var i=0;i<CL.length;i++){ o+='<option value="'+esc(CL[i])+'"'+(sel===CL[i]?' selected':'')+'>'+esc(CL[i])+'</option>'; } return o; }
+function ecReadRows(){
+  var rows=document.querySelectorAll('#ecRows .e-cult-row');
+  _ecRows=[].map.call(rows,function(r){ return {
+    cultura:(r.querySelector('.ec-c')||{}).value||'',
+    cultivar:(r.querySelector('.ec-v')||{}).value||'',
+    plantio:(r.querySelector('.ec-p')||{}).value||''
+  }; });
+}
+function renderEcRows(){
+  var box=document.getElementById('ecRows'); if(!box) return;
+  box.innerHTML=_ecRows.map(function(c,i){
+    return '<div class="e-cult-row" data-i="'+i+'">'+
+      '<div class="e-cult-head"><span class="e-cult-n">Cultura '+(i+1)+(i===0?' \u00b7 principal':'')+'</span>'+(_ecRows.length>1?'<button type="button" class="e-cult-del" onclick="ecDelRow('+i+')">\u2715</button>':'')+'</div>'+
+      '<select class="e-inp ec-c">'+_ecOpts(c.cultura)+'</select>'+
+      '<div class="e-row" style="margin-top:6px"><input class="e-inp ec-v" value="'+esc(c.cultivar||'')+'" placeholder="Cultivar"><input class="e-inp ec-p" value="'+esc(c.plantio||'')+'" placeholder="Plantio dd/mm/aaaa"></div>'+
+    '</div>';
+  }).join('');
+}
+function ecAddRow(){ ecReadRows(); _ecRows.push({cultura:'',cultivar:'',plantio:''}); renderEcRows(); }
+function ecDelRow(i){ ecReadRows(); _ecRows.splice(i,1); if(!_ecRows.length)_ecRows.push({cultura:'',cultivar:'',plantio:''}); renderEcRows(); }
 function openE(id){
   closeDetail();curE=id;
-  var d=data[id]||{cultura:"",cultivar:"",plantio:"",area:""};
-  var opts="";for(var i=0;i<CL.length;i++){opts+='<option value="'+esc(CL[i])+'" '+(d.cultura===CL[i]?"selected":"")+'>'+esc(CL[i])+'</option>'}
-  document.getElementById("ePnl").innerHTML='<div class="edit-title">EDITAR QUADRA</div><div class="edit-id">'+id+'</div><label class="e-lbl">CULTURA</label><select id="ec" class="e-inp"><option value="">\u2014 selecionar \u2014</option>'+opts+'</select><label class="e-lbl">CULTIVAR</label><input id="ev" class="e-inp" value="'+esc(d.cultivar||"")+'" placeholder="Ex: BMX Nexus I2X"><label class="e-lbl">DATA DE PLANTIO</label><input id="ep" class="e-inp" value="'+esc(d.plantio||"")+'" placeholder="dd/mm/aaaa"><label class="e-lbl">\u00c1REA (HA)</label><input id="ea" class="e-inp" value="'+(d.area||"")+'" placeholder="1.0" type="number" step="0.01"><div class="e-btns"><button class="e-btn e-save" onclick="saveE()">SALVAR</button><button class="e-btn e-cancel" onclick="closeEdit()">CANCELAR</button></div>';
+  var d=data[id]||{};
+  _ecRows=getCulturas(d).map(function(c){return {cultura:c.cultura,cultivar:c.cultivar||'',plantio:c.plantio||''};});
+  if(!_ecRows.length)_ecRows=[{cultura:'',cultivar:'',plantio:''}];
+  document.getElementById("ePnl").innerHTML=
+    '<div class="edit-title">EDITAR QUADRA</div><div class="edit-id">'+id+'</div>'+
+    '<label class="e-lbl">CULTURAS</label><div id="ecRows"></div>'+
+    '<button type="button" class="e-add-cult" onclick="ecAddRow()">+ Adicionar cultura</button>'+
+    '<label class="e-lbl">\u00c1REA (HA)</label><input id="ea" class="e-inp" value="'+(d.area||"")+'" placeholder="1.0" type="number" step="0.01">'+
+    '<div class="e-btns"><button class="e-btn e-save" onclick="saveE()">SALVAR</button><button class="e-btn e-cancel" onclick="closeEdit()">CANCELAR</button></div>';
+  renderEcRows();
   document.getElementById("eOvl").classList.add("open");
 }
 function closeEdit(){document.getElementById("eOvl").classList.remove("open");curE=null}
 function saveE(){
   if(!curE)return;
+  ecReadRows();
+  var culturas=_ecRows.filter(function(c){return c.cultura;}).map(function(c){return {cultura:c.cultura,cultivar:(c.cultivar||'').trim(),plantio:(c.plantio||'').trim()};});
   var estudos = (data[curE]&&data[curE].estudos)||[];
+  var prim = culturas[0]||{cultura:'',cultivar:'',plantio:''};
   data[curE]={
-    cultura:document.getElementById("ec").value,
-    cultivar:document.getElementById("ev").value,
-    plantio:document.getElementById("ep").value,
+    cultura:prim.cultura, cultivar:prim.cultivar, plantio:prim.plantio,
+    culturas:culturas,
     area:parseFloat(document.getElementById("ea").value)||null,
     estudos:estudos
   };
@@ -3042,8 +3112,8 @@ function renderSearchResults(query){
     var matches=[];
     if(q){
       if(normStr(qid).indexOf(q)>=0){score+=10;matches.push("quadra")}
-      if(normStr(d.cultura).indexOf(q)>=0){score+=5;matches.push("cultura")}
-      if(normStr(d.cultivar).indexOf(q)>=0){score+=3;matches.push("cultivar")}
+      if(normStr(getCulturas(d).map(function(c){return c.cultura;}).join(" ")).indexOf(q)>=0){score+=5;matches.push("cultura")}
+      if(normStr(getCulturas(d).map(function(c){return c.cultivar;}).join(" ")).indexOf(q)>=0){score+=3;matches.push("cultivar")}
     }
     (d.estudos||[]).forEach(function(s){
       s=normalizeStudy(s);
