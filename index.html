@@ -840,6 +840,144 @@ function ensureQGEO(){
   return !!QGEO;
 }
 
+/* ===== LOCAIS — múltiplos locais georreferenciados (mundo todo) ===== */
+var LOCAIS_KEY="iracema-locais-v1", QLOCAL_KEY="iracema-qlocal-v1", LOCAL_ATIVO_KEY="iracema-local-ativo";
+var HOME_LOCAL="iracemapolis";
+var LOCAIS=null, QLOCAL=null, localAtivo=null, _locPick=null;
+function loadLocais(){ try{ var s=localStorage.getItem(LOCAIS_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function saveLocais(){ try{ localStorage.setItem(LOCAIS_KEY, JSON.stringify(LOCAIS)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }
+function loadQLocal(){ try{ var s=localStorage.getItem(QLOCAL_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function saveQLocal(){ try{ localStorage.setItem(QLOCAL_KEY, JSON.stringify(QLOCAL)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }
+function _homeCentro(){ try{ if(_geo&&_geo.corners){ var c=_geo.corners; return [ (c[0][0]+c[2][0])/2, (c[0][1]+c[2][1])/2 ]; } }catch(e){} return ESTACAO_CENTER.slice(); }
+function ensureLocais(){
+  if(!LOCAIS) LOCAIS=loadLocais()||{};
+  if(!QLOCAL) QLOCAL=loadQLocal()||{};
+  if(!LOCAIS[HOME_LOCAL]) LOCAIS[HOME_LOCAL]={nome:"Estação Iracemápolis", centro:_homeCentro(), zoom:17};
+  var changed=false;
+  if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!QLOCAL[id]){ QLOCAL[id]=HOME_LOCAL; changed=true; } }); }
+  if(!localAtivo){ try{ localAtivo=localStorage.getItem(LOCAL_ATIVO_KEY)||HOME_LOCAL; }catch(e){ localAtivo=HOME_LOCAL; } }
+  if(!LOCAIS[localAtivo]) localAtivo=HOME_LOCAL;
+  if(changed) saveQLocal();
+  return LOCAIS;
+}
+function quadrasDoLocal(id){ ensureLocais(); var out=[]; if(QGEO){ Object.keys(QGEO).forEach(function(q){ if((QLOCAL[q]||HOME_LOCAL)===id) out.push(q); }); } return out; }
+function quadrasAtivas(){ return quadrasDoLocal(localAtivo); }
+function novoLocalId(){ return 'loc'+Date.now().toString(36)+Math.floor(Math.random()*1000); }
+function flyToLocal(id){
+  if(!_map) initMap(); ensureLocais(); var Lc=LOCAIS[id]; if(!Lc) return;
+  var qs=quadrasDoLocal(id);
+  if(qs.length){ var b=99,s=999,e=-99,n=-999;
+    qs.forEach(function(q){ (QGEO[q]||[]).forEach(function(p){ if(p[0]<b)b=p[0]; if(p[0]>n)n=p[0]; if(p[1]<s)s=p[1]; if(p[1]>e)e=p[1]; }); });
+    if(b<=n&&s<=e){ try{ _map.fitBounds([[b,s],[n,e]],{padding:[50,50],maxZoom:18}); return; }catch(e2){} }
+  }
+  _map.setView(Lc.centro||ESTACAO_CENTER, Lc.zoom||16);
+}
+function setLocalAtivo(id){
+  ensureLocais(); if(!LOCAIS[id]) return;
+  localAtivo=id; try{ localStorage.setItem(LOCAL_ATIVO_KEY, id); }catch(e){}
+  ndviMeans=null; if(ndviOverlay&&_map){ try{_map.removeLayer(ndviOverlay);}catch(e){} ndviOverlay=null; }
+  closeLocalMenu();
+  flyToLocal(id); render(); buildLocalChip(); if(typeof renderNdviRank==='function') renderNdviRank();
+  var p=document.getElementById('ndviPanel'); if(p&&p.style.display==='block'){ try{ ndviLoadDates(); }catch(e){} if(ndviIndex&&ndviDate) setTimeout(function(){ try{ndviLoadImage();}catch(e){} },350); }
+}
+/* ---- UI: chip do local + menu + modal "Novo local" (busca geocoder) ---- */
+function _locCss(){ if(document.getElementById('locCss'))return; var s=document.createElement('style'); s.id='locCss';
+  s.textContent='.loc-chip{display:inline-flex;align-items:center;gap:5px;margin-top:4px;background:#111811;border:1px solid #244024;color:#9ac49a;padding:3px 9px;border-radius:999px;font:600 11px/1 system-ui,sans-serif;cursor:pointer;max-width:78vw}.loc-chip:hover{background:#1a2a1a}.loc-chip b{color:#cfe6cf;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}.loc-chip .car{color:#6a9a6a;font-size:9px}.loc-chip .sub{color:#6a8a6a;font-weight:600}'+
+  '.loc-menu{position:fixed;z-index:1600;background:#0e120e;border:1px solid #2a3a2a;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.6);min-width:230px;max-width:86vw;overflow:hidden;font:13px system-ui,sans-serif}.loc-mi{padding:9px 12px;color:#cfe0cf;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}.loc-mi:hover{background:#16241a}.loc-mi.on{background:#15301a}.loc-mi .sub{color:#6a8a6a;font-size:11px;display:flex;align-items:center;gap:6px}.loc-sep{height:1px;background:#1e2e1e}.loc-new{color:#9ac49a;font-weight:700}.loc-x{color:#7a5a5a;font-size:13px;padding:0 3px;cursor:pointer}.loc-x:hover{color:#ff8a80}'+
+  '.loc-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1700;display:none;align-items:center;justify-content:center;padding:16px}.loc-box{background:#0e120e;border:1px solid #2a3a2a;border-radius:14px;max-width:440px;width:100%;padding:16px;font:13px system-ui,sans-serif;color:#dfeadf;box-sizing:border-box}.loc-box h3{margin:0 0 6px;font-size:15px;color:#cfe6cf}.loc-box label{display:block;font-size:11px;color:#8aa88a;margin:10px 0 3px;font-weight:600;letter-spacing:.4px}.loc-box input{width:100%;box-sizing:border-box;background:#0a0e0a;border:1px solid #2a3a2a;border-radius:8px;color:#eaf0ea;padding:9px;font-size:14px}.loc-box .row{display:flex;gap:8px}.loc-btn{flex:1;border:none;border-radius:9px;padding:10px;font-weight:700;cursor:pointer;font-size:13px}.loc-ok{background:#1f5a2a;color:#eafaea}.loc-ok:hover{background:#246a31}.loc-cancel{background:#222;color:#bbb}.loc-2nd{background:#16301c;color:#9ac49a}.loc-res{margin-top:6px;max-height:168px;overflow:auto}.loc-ri{padding:8px;border:1px solid #1e2e1e;border-radius:8px;margin-top:5px;cursor:pointer;font-size:12px;color:#cfe0cf}.loc-ri:hover{background:#16241a}';
+  document.head.appendChild(s);
+}
+function buildLocalChip(){
+  _locCss(); ensureLocais();
+  var host=document.querySelector('.top-bar > div:first-child'); if(!host) return;
+  var chip=document.getElementById('localChip');
+  if(!chip){ chip=document.createElement('div'); chip.id='localChip'; chip.className='loc-chip'; chip.onclick=toggleLocalMenu; host.appendChild(chip); }
+  var nome=(LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'—';
+  var n=quadrasDoLocal(localAtivo).length;
+  chip.innerHTML='📍 <b>'+esc(nome)+'</b> <span class="sub">'+n+' quadra'+(n===1?'':'s')+'</span> <span class="car">▾</span>';
+}
+function closeLocalMenu(){ var m=document.getElementById('localMenu'); if(m) m.remove(); document.removeEventListener('click', _locMenuOutside, true); }
+function _locMenuOutside(e){ var m=document.getElementById('localMenu'), c=document.getElementById('localChip'); if(m && !m.contains(e.target) && c && !c.contains(e.target)) closeLocalMenu(); }
+function toggleLocalMenu(){ if(document.getElementById('localMenu')){ closeLocalMenu(); } else { openLocalMenu(); } }
+function openLocalMenu(){
+  _locCss(); ensureLocais(); closeLocalMenu();
+  var chip=document.getElementById('localChip'), r=chip?chip.getBoundingClientRect():{left:12,bottom:50};
+  var m=document.createElement('div'); m.id='localMenu'; m.className='loc-menu';
+  var html='';
+  Object.keys(LOCAIS).forEach(function(id){ var Lc=LOCAIS[id], n=quadrasDoLocal(id).length, on=(id===localAtivo);
+    html+='<div class="loc-mi'+(on?' on':'')+'" data-go="'+id+'"><span>'+(on?'✓ ':'')+esc(Lc.nome)+'</span><span class="sub">'+n+'q'+(id!==HOME_LOCAL?' <span class="loc-x" data-del="'+id+'" title="Excluir local">✕</span>':'')+'</span></div>';
+  });
+  html+='<div class="loc-sep"></div><div class="loc-mi loc-new" data-new="1">＋ Novo local…</div>';
+  m.innerHTML=html; document.body.appendChild(m);
+  m.style.left=Math.max(8,Math.min(r.left, window.innerWidth-m.offsetWidth-8))+'px';
+  m.style.top=((r.bottom||50)+6)+'px';
+  m.addEventListener('click', function(e){
+    var del=e.target.getAttribute&&e.target.getAttribute('data-del');
+    if(del){ e.stopPropagation(); excluirLocal(del); return; }
+    var it=e.target.closest('.loc-mi'); if(!it) return;
+    if(it.getAttribute('data-new')){ closeLocalMenu(); abrirNovoLocal(); return; }
+    var go=it.getAttribute('data-go'); if(go) setLocalAtivo(go);
+  });
+  setTimeout(function(){ document.addEventListener('click', _locMenuOutside, true); },0);
+}
+function excluirLocal(id){
+  ensureLocais(); if(id===HOME_LOCAL){ alert('O local da estação não pode ser excluído.'); return; }
+  var qs=quadrasDoLocal(id);
+  if(!confirm('Excluir o local "'+LOCAIS[id].nome+'"'+(qs.length?(' e suas '+qs.length+' quadra(s)'):'')+'?\nEsta ação não pode ser desfeita.')) return;
+  qs.forEach(function(q){ delete QGEO[q]; if(data[q]) delete data[q]; delete QLOCAL[q]; });
+  delete LOCAIS[id]; if(localAtivo===id) localAtivo=HOME_LOCAL;
+  saveQGEO(); save(); saveLocais(); saveQLocal();
+  closeLocalMenu(); setLocalAtivo(HOME_LOCAL); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
+}
+function abrirNovoLocal(){
+  _locCss();
+  var m=document.getElementById('locModal');
+  if(!m){ m=document.createElement('div'); m.id='locModal'; m.className='loc-modal'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
+  _locPick=null;
+  m.innerHTML='<div class="loc-box">'+
+    '<h3>📍 Novo local</h3>'+
+    '<div style="font-size:11px;color:#6a8a6a;margin-bottom:2px">Crie um local em qualquer lugar do mundo. Depois desenhe as quadras dele (já georreferenciadas).</div>'+
+    '<label>Nome do local</label><input id="locNome" placeholder="Ex.: Fazenda Cordeirópolis" autocomplete="off">'+
+    '<label>Buscar endereço / cidade</label>'+
+    '<div class="row"><input id="locBusca" placeholder="Ex.: Cordeirópolis SP" autocomplete="off"><button class="loc-btn loc-2nd" style="flex:none;padding:10px 14px" onclick="geocodeGo()">Buscar</button></div>'+
+    '<div id="locRes" class="loc-res"></div>'+
+    '<div style="font-size:11px;color:#6a8a6a;margin:10px 0 2px">…ou use o que está visível no mapa agora:</div>'+
+    '<div class="row" style="margin-top:4px"><button class="loc-btn loc-ok" onclick="criarLocal()">Criar local</button><button class="loc-btn loc-cancel" onclick="document.getElementById(\'locModal\').style.display=\'none\'">Cancelar</button></div>'+
+    '</div>';
+  m.style.display='flex';
+  setTimeout(function(){ var i=document.getElementById('locNome'); if(i) i.focus(); var bi=document.getElementById('locBusca'); if(bi) bi.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); geocodeGo(); } }; },60);
+}
+function geocodeGo(){
+  var q=((document.getElementById('locBusca')||{}).value||'').trim(); if(!q) return;
+  var res=document.getElementById('locRes'); if(res) res.innerHTML='<div style="color:#8aa88a;font-size:12px;padding:6px">Buscando…</div>';
+  fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&accept-language=pt-BR&q='+encodeURIComponent(q))
+    .then(function(r){return r.json();}).then(function(arr){
+      if(!arr||!arr.length){ if(res) res.innerHTML='<div style="color:#c88;font-size:12px;padding:6px">Nada encontrado.</div>'; return; }
+      if(res){ res.innerHTML=arr.map(function(o,i){ return '<div class="loc-ri" data-i="'+i+'">'+esc(o.display_name)+'</div>'; }).join('');
+        res.querySelectorAll('.loc-ri').forEach(function(el){ el.onclick=function(){ var o=arr[+el.getAttribute('data-i')];
+          _locPick={centro:[parseFloat(o.lat),parseFloat(o.lon)], zoom:16};
+          if(_map) _map.setView(_locPick.centro,_locPick.zoom);
+          res.querySelectorAll('.loc-ri').forEach(function(x){x.style.borderColor='#1e2e1e';}); el.style.borderColor='#3a7a3a';
+          var nm=document.getElementById('locNome'); if(nm&&!nm.value) nm.value=(o.name||o.display_name.split(',')[0]);
+        }; });
+      }
+    }).catch(function(){ if(res) res.innerHTML='<div style="color:#c88;font-size:12px;padding:6px">Erro na busca (sem internet?).</div>'; });
+}
+function criarLocal(){
+  ensureLocais();
+  var nome=((document.getElementById('locNome')||{}).value||'').trim();
+  if(!nome){ alert('Dê um nome ao local.'); return; }
+  var centro, zoom;
+  if(_locPick){ centro=_locPick.centro; zoom=_locPick.zoom; }
+  else if(_map){ var c=_map.getCenter(); centro=[c.lat,c.lng]; zoom=_map.getZoom(); }
+  else { centro=ESTACAO_CENTER.slice(); zoom=16; }
+  var id=novoLocalId();
+  LOCAIS[id]={nome:nome, centro:centro, zoom:zoom}; saveLocais(); _locPick=null;
+  var m=document.getElementById('locModal'); if(m) m.style.display='none';
+  setLocalAtivo(id);
+  setTimeout(function(){ alert('Local "'+nome+'" criado!\n\nAgora toque em ✏️ Quadras → ＋ Nova quadra para desenhar as quadras deste local. Elas já ficam georreferenciadas e o NDVI funciona dentro delas.'); },180);
+}
+
 var editMode=false, editId=null, drawMode=false, drawPts=[], _editLayer=null, _editPoly=null;
 
 function toggleQuadraEdit(){
@@ -895,6 +1033,7 @@ function finishDrawQuadra(){
   var id=prompt('Nome da nova quadra (ex.: H4):'); if(id===null) return; id=String(id).trim(); if(!id) return;
   if(QGEO[id]){ alert('J\u00e1 existe uma quadra chamada "'+id+'".'); return; }
   QGEO[id]=drawPts.slice();
+  ensureLocais(); QLOCAL[id]=localAtivo; saveQLocal();
   if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]};
   saveQGEO(); save();
   endDraw(); editId=id; render(); buildEditPanel();
@@ -906,6 +1045,7 @@ function deleteQuadra(){
   if(!editId) return;
   if(!confirm('Excluir a quadra "'+editId+'" (forma e dados)? Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.')) return;
   delete QGEO[editId]; if(data[editId]) delete data[editId];
+  ensureLocais(); delete QLOCAL[editId]; saveQLocal();
   saveQGEO(); save(); editId=null; render(); buildEditPanel(); updateAgendaBadge();
 }
 function buildEditPanel(){
@@ -930,7 +1070,7 @@ var SUPABASE_URL='https://atgmvbdcknslpmnjvnia.supabase.co';
 var SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Z212YmRja25zbHBtbmp2bmlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjY3ODUsImV4cCI6MjA5NTgwMjc4NX0.KK_G_ulSGXk770gTJWkEQ2R4JY0Ua1--0iOMNGRzQWg';
 var SB=null, _cloudApplying=false, _cloudTimer=null, _cloudCh=null, _cloudReady=false, _cloudPending=null;
 function cloudInit(){ if(SB) return SB; try{ if(window.supabase && SUPABASE_URL) SB=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }catch(e){ SB=null; } return SB; }
-function cloudState(){ ensureQGEO(); return { data:data, qgeo:QGEO, georef:_geo }; }
+function cloudState(){ ensureQGEO(); ensureLocais(); return { data:data, qgeo:QGEO, georef:_geo, locais:LOCAIS, qlocal:QLOCAL }; }
 /* Indicador visível de sincronização (toque = forçar sync) */
 function cloudBadge(kind,txt){
   if(!document.getElementById('cloudBadgeCss')){
@@ -953,7 +1093,10 @@ function cloudApply(st){
     if(st.data && typeof st.data==='object'){ data=st.data; try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} }
     if(st.qgeo && typeof st.qgeo==='object'){ QGEO=st.qgeo; saveQGEO(); }
     if(st.georef){ _geo=st.georef; saveGeoref(_geo); }
+    if(st.locais && typeof st.locais==='object'){ LOCAIS=st.locais; try{ localStorage.setItem(LOCAIS_KEY, JSON.stringify(LOCAIS)); }catch(e){} }
+    if(st.qlocal && typeof st.qlocal==='object'){ QLOCAL=st.qlocal; try{ localStorage.setItem(QLOCAL_KEY, JSON.stringify(QLOCAL)); }catch(e){} }
     if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]}; }); }
+    ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip();
     render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
   }catch(e){}
   _cloudApplying=false;
@@ -1004,10 +1147,10 @@ function render(){
   initMap();
   if(!_qLayer) return;
   _qLayer.clearLayers();
-  ensureQGEO();
+  ensureQGEO(); ensureLocais();
   if(!QGEO) return;
   _editPoly=null;
-  var ids=Object.keys(QGEO);
+  var ids=quadrasAtivas();
   for(var k=0;k<ids.length;k++){
     var id=ids[k], latlngs=QGEO[id], d=data[id]||{}, dap=cDAP(d.plantio), st=gS(d.cultura,dap), ac=gC(d.cultura);
     if(!latlngs || latlngs.length<3) continue;
@@ -1144,7 +1287,7 @@ function computeQuadraMeans(){
          var cv=document.createElement('canvas'); cv.width=iw; cv.height=ih;
          var ctx=cv.getContext('2d'); ctx.drawImage(img,0,0);
          var data=ctx.getImageData(0,0,iw,ih).data, means={};
-         Object.keys(QGEO||{}).forEach(function(id){
+         quadrasAtivas().forEach(function(id){
            var pp=QGEO[id]; if(!pp||pp.length<3) return;
            var ring=pp.map(function(p){ return [ (p[1]-w)/(e-w)*iw, (n-p[0])/(n-s)*ih ]; });
            var minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
@@ -1173,7 +1316,7 @@ function renderNdviRank(){
 }
 function quadrasMultiPolygon(){
   ensureQGEO(); var polys=[];
-  Object.keys(QGEO||{}).forEach(function(id){
+  quadrasAtivas().forEach(function(id){
     var pts=QGEO[id]; if(!pts||pts.length<3) return;
     var ring=pts.map(function(p){return [p[1],p[0]];}); ring.push(ring[0]); polys.push([ring]);
   });
@@ -1185,7 +1328,7 @@ function ndviRefresh(){ ndviLoadDates(); if(ndviIndex && ndviDate) ndviLoadImage
 function ndviOnMove(){ var p=document.getElementById('ndviPanel'); if(!(p && p.style.display==='block' && ndviIndex && ndviDate)) return; clearTimeout(_ndviMoveT); _ndviMoveT=setTimeout(function(){ ndviLoadImage(); }, 700); }
 function stationBBox(){
   ensureQGEO(); var a=99,b=999,c=-99,d=-999;
-  Object.keys(QGEO||{}).forEach(function(id){ QGEO[id].forEach(function(p){ if(p[0]<a)a=p[0]; if(p[0]>c)c=p[0]; if(p[1]<b)b=p[1]; if(p[1]>d)d=p[1]; }); });
+  quadrasAtivas().forEach(function(id){ QGEO[id].forEach(function(p){ if(p[0]<a)a=p[0]; if(p[0]>c)c=p[0]; if(p[1]<b)b=p[1]; if(p[1]>d)d=p[1]; }); });
   var ml=(c-a)*0.06, mg=(d-b)*0.06;
   return [b-mg, a-ml, d+mg, c+ml]; /* w,s,e,n */
 }
@@ -1203,7 +1346,7 @@ function ndviBBox(){
 function ndviStatus(msg, kind){ var el=document.getElementById('ndviStatus'); if(el){ el.textContent=msg||''; el.style.color=kind==='err'?'#ff8a80':(kind==='ok'?'#9ac49a':'#9ab39a'); } }
 var ndviProbe=false, _gpsMarker=null;
 function quadraAt(lat,lng){ ensureQGEO(); var f=null;
-  Object.keys(QGEO||{}).forEach(function(id){ var pp=QGEO[id]; if(!pp||pp.length<3)return;
+  quadrasAtivas().forEach(function(id){ var pp=QGEO[id]; if(!pp||pp.length<3)return;
     var ring=pp.map(function(p){return [p[1],p[0]];}); if(pointInRing(lng,lat,ring)) f=id; }); return f; }
 function ndviToggleProbe(){
   ndviProbe=!ndviProbe;
@@ -1300,7 +1443,7 @@ function ndviLoadImage(){
          try{
            var cv=document.createElement('canvas'); cv.width=iw; cv.height=ih;
            var ctx=cv.getContext('2d'); ctx.beginPath();
-           Object.keys(QGEO||{}).forEach(function(id){
+           quadrasAtivas().forEach(function(id){
              var pp=QGEO[id]; if(!pp||pp.length<3) return;
              pp.forEach(function(p,i){ var px=(p[1]-w)/(e-w)*iw, py=(n-p[0])/(n-s)*ih; if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); });
              ctx.closePath();
@@ -2479,11 +2622,14 @@ function closeEventEdit(){
 /* ============ EXPORT / IMPORT JSON ============ */
 function exportData(){
   try{
+    if(typeof ensureLocais==='function') ensureLocais();
     var payload={
-      _iracema:true, version:2, exported:todayISO(),
+      _iracema:true, version:3, exported:todayISO(),
       data:data,
       qgeo:(typeof QGEO!=='undefined'?QGEO:null),
-      georef:(typeof _geo!=='undefined'?_geo:null)
+      georef:(typeof _geo!=='undefined'?_geo:null),
+      locais:(typeof LOCAIS!=='undefined'?LOCAIS:null),
+      qlocal:(typeof QLOCAL!=='undefined'?QLOCAL:null)
     };
     var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
     var url=URL.createObjectURL(blob);
@@ -2502,8 +2648,8 @@ function importData(ev){
   r.onload=function(e){
     try{
       var imported=JSON.parse(e.target.result);
-      var dd, qq=null, gg=null;
-      if(imported && imported._iracema){ dd=imported.data||{}; qq=imported.qgeo||null; gg=imported.georef||null; }
+      var dd, qq=null, gg=null, ll=null, ql=null;
+      if(imported && imported._iracema){ dd=imported.data||{}; qq=imported.qgeo||null; gg=imported.georef||null; ll=imported.locais||null; ql=imported.qlocal||null; }
       else { dd=imported; } /* formato antigo: só os dados */
       Object.keys(dd).forEach(function(k){
         data[k]=dd[k];
@@ -2511,6 +2657,9 @@ function importData(ev){
       });
       if(gg){ _geo=gg; if(typeof saveGeoref==='function') saveGeoref(_geo); }
       if(qq){ QGEO=qq; if(typeof saveQGEO==='function') saveQGEO(); }
+      if(ll){ LOCAIS=ll; if(typeof saveLocais==='function') saveLocais(); }
+      if(ql){ QLOCAL=ql; if(typeof saveQLocal==='function') saveQLocal(); }
+      if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
       save();
       try{ if(_map && _geo && typeof geoBounds==='function') _map.fitBounds(geoBounds(_geo)); }catch(_e){}
       render();updateAgendaBadge();
@@ -2933,6 +3082,7 @@ function init(){
     document.getElementById("dateInfo").textContent=new Date().toLocaleDateString("pt-BR",{day:"numeric",month:"short",year:"numeric"});
     render();
   injectTopbarButtons();updateTodayBadge();renderLeg();updateAgendaBadge();
+  ensureLocais(); buildLocalChip(); try{ flyToLocal(localAtivo); }catch(e){}
   if(typeof cloudStart==='function') cloudStart();
   }catch(e){
     var b=document.createElement('div');
