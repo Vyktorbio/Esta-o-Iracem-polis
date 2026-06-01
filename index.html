@@ -1180,7 +1180,7 @@ function cloudBadge(kind,txt){
     document.head.appendChild(s);
   }
   var el=document.getElementById('cloudBadge');
-  if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Sincronização com a nuvem (toque para forçar)'; el.onclick=function(){ cloudSyncNow(); }; document.body.appendChild(el); }
+  if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Sincronização com a nuvem (toque para atualizar)'; el.onclick=function(){ cloudResync(); }; document.body.appendChild(el); }
   var L={saving:'⟳ salvando…', saved:'☁︎ salvo', error:'⚠︎ erro — toque p/ tentar', offline:'⌁ sem conexão', idle:'☁︎'};
   el.className='cloud-badge cb-'+(kind||'idle');
   el.textContent=(L[kind||'idle']||L.idle)+(txt?(' '+txt):'');
@@ -1214,6 +1214,26 @@ function cloudSave(){
 }
 function cloudSaveSoon(){ if(_cloudApplying) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
 function cloudSyncNow(){ if(!cloudInit()) return; clearTimeout(_cloudTimer); cloudSave(); }
+/* Puxa o estado atual da nuvem e aplica (não sobrescreve edição em andamento). */
+function cloudPull(){
+  if(!cloudInit()) return;
+  cloudBadge('saving');
+  try{
+    SB.from('app_state').select('state').eq('id',1).single().then(function(res){
+      var st = res && res.data && res.data.state;
+      if(st && st.data && Object.keys(st.data).length){ cloudApply(st); }
+      cloudBadge('saved');
+    }, function(){ cloudBadge('offline'); });
+  }catch(e){ cloudBadge('offline'); }
+}
+/* Reconciliação ao voltar o foco / reconectar: se há mudança local pendente, empurra (ela vence);
+   senão, puxa o mais recente da nuvem. E garante o realtime vivo. */
+function cloudResync(){
+  if(!cloudInit()) return;
+  if(_cloudTimer){ cloudSyncNow(); }
+  else { cloudPull(); }
+  cloudSubscribe();
+}
 function cloudSubscribe(){
   if(!SB) return;
   try{
@@ -1239,8 +1259,13 @@ function cloudStart(){
     }, function(){ cloudBadge('offline'); });
   }catch(e){ cloudBadge('offline'); }
   if(!window.__cloudNet){ window.__cloudNet=true;
-    window.addEventListener('online', function(){ cloudBadge('saving'); cloudSubscribe(); cloudSyncNow(); });
+    window.addEventListener('online', function(){ cloudBadge('saving'); cloudResync(); });
     window.addEventListener('offline', function(){ cloudBadge('offline'); });
+  }
+  /* Re-sincroniza ao voltar pra aba (realtime pode ter caído com o sleep/rede) */
+  if(!window.__cloudFocus){ window.__cloudFocus=true;
+    document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') cloudResync(); });
+    window.addEventListener('focus', function(){ cloudResync(); });
   }
 }
 
