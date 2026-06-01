@@ -387,7 +387,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 </head>
 <body>
 <div class="top-bar">
-<div><div class="top-bar-sub">Estação Experimental</div><h1>IRACEMÁPOLIS</h1></div>
+<div><div class="top-bar-sub">Imageamento multiespectral</div><h1>GEORREFERENCIADO</h1></div>
 <div class="top-bar-right">
 <span class="top-bar-info" id="dateInfo"></span>
 <button class="btn-sm" id="btnAgenda" onclick="toggleAgenda()">AGENDA <span id="agendaBadge" style="color:#ff5252;font-weight:700"></span></button>
@@ -417,12 +417,9 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 
 <!-- Toolbar de backup -->
 <div class="toolbar-extra">
-<button onclick="startGeoref()" title="Alinhar a imagem das quadras sobre o satélite">📍 Alinhar</button>
-<button onclick="toggleQuadraEdit()" title="Editar formato das quadras e criar novas">✏️ Quadras</button>
 <button onclick="toggleNdvi()" title="Camadas NDVI / NDRE / GNDVI (Sentinel-2)">🛰️ NDVI</button>
 <button onclick="locateMe()" title="Mostrar minha localização (GPS)">📍 GPS</button>
-<button onclick="exportData()" title="Exportar backup JSON">💾 Backup</button>
-<button onclick="document.getElementById('imp').click()" title="Importar backup">📥 Importar</button>
+<button id="menuBtn" onclick="toggleMainMenu()" title="Ferramentas: editar quadras, alinhar, backup, importar">☰ Menu</button>
 <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">
 </div>
 
@@ -975,7 +972,28 @@ function criarLocal(){
   LOCAIS[id]={nome:nome, centro:centro, zoom:zoom}; saveLocais(); _locPick=null;
   var m=document.getElementById('locModal'); if(m) m.style.display='none';
   setLocalAtivo(id);
-  setTimeout(function(){ alert('Local "'+nome+'" criado!\n\nAgora toque em ✏️ Quadras → ＋ Nova quadra para desenhar as quadras deste local. Elas já ficam georreferenciadas e o NDVI funciona dentro delas.'); },180);
+  setTimeout(function(){ alert('Local "'+nome+'" criado!\n\nAgora toque em ☰ Menu → ✏️ Editar quadras → ＋ Nova quadra para desenhar as quadras deste local. Elas já ficam georreferenciadas e o NDVI funciona dentro delas.'); },180);
+}
+
+/* ---- Menu de ferramentas (☰): Editar quadras / Alinhar / Backup / Importar ---- */
+function _menuCss(){ if(document.getElementById('menuCss'))return; var s=document.createElement('style'); s.id='menuCss';
+  s.textContent='.main-menu{position:fixed;bottom:60px;right:14px;z-index:60;background:#0e120e;border:1px solid #2a3a2a;border-radius:11px;box-shadow:0 10px 30px rgba(0,0,0,.6);overflow:hidden;display:flex;flex-direction:column;min-width:200px}.main-menu button{background:none;border:none;color:#cfe0cf;text-align:left;padding:12px 15px;font:600 13px system-ui,sans-serif;cursor:pointer;white-space:nowrap}.main-menu button:hover{background:#16241a}.main-menu .mm-sep{height:1px;background:#1e2e1e;margin:0}';
+  document.head.appendChild(s);
+}
+function closeMainMenu(){ var m=document.getElementById('mainMenu'); if(m) m.remove(); document.removeEventListener('click', _mainMenuOutside, true); }
+function _mainMenuOutside(e){ var m=document.getElementById('mainMenu'), b=document.getElementById('menuBtn'); if(m && !m.contains(e.target) && b && !b.contains(e.target)) closeMainMenu(); }
+function toggleMainMenu(){
+  if(document.getElementById('mainMenu')){ closeMainMenu(); return; }
+  _menuCss();
+  var m=document.createElement('div'); m.id='mainMenu'; m.className='main-menu';
+  m.innerHTML=
+    '<button onclick="closeMainMenu();toggleQuadraEdit()">✏️ Editar quadras</button>'+
+    '<button onclick="closeMainMenu();startGeoref()">📍 Alinhar mapa</button>'+
+    '<div class="mm-sep"></div>'+
+    '<button onclick="closeMainMenu();exportData()">💾 Backup</button>'+
+    '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">📥 Importar</button>';
+  document.body.appendChild(m);
+  setTimeout(function(){ document.addEventListener('click', _mainMenuOutside, true); },0);
 }
 
 var editMode=false, editId=null, drawMode=false, drawPts=[], _editLayer=null, _editPoly=null;
