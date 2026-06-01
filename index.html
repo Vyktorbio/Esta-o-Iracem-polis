@@ -1170,8 +1170,12 @@ function buildEditPanel(){
 var SUPABASE_URL='https://atgmvbdcknslpmnjvnia.supabase.co';
 var SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0Z212YmRja25zbHBtbmp2bmlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMjY3ODUsImV4cCI6MjA5NTgwMjc4NX0.KK_G_ulSGXk770gTJWkEQ2R4JY0Ua1--0iOMNGRzQWg';
 var SB=null, _cloudApplying=false, _cloudTimer=null, _cloudCh=null, _cloudReady=false, _cloudPending=null;
+/* _cloudRev: revisão monotônica do documento (evita aplicar/empurrar estado mais antigo).
+   _cloudInitDone: só permite ESCREVER na nuvem DEPOIS de ter LIDO ela uma vez
+   (impede que um cliente recém-aberto, com dados velhos, atropele a nuvem). */
+var _cloudRev=null, _cloudInitDone=false;
 function cloudInit(){ if(SB) return SB; try{ if(window.supabase && SUPABASE_URL) SB=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }catch(e){ SB=null; } return SB; }
-function cloudState(){ ensureQGEO(); ensureLocais(); return { data:data, qgeo:QGEO, georef:_geo, locais:LOCAIS, qlocal:QLOCAL }; }
+function cloudState(){ ensureQGEO(); ensureLocais(); return { data:data, qgeo:QGEO, georef:_geo, locais:LOCAIS, qlocal:QLOCAL, rev:(_cloudRev||0) }; }
 /* Indicador visível de sincronização (toque = forçar sync) */
 function cloudBadge(kind,txt){
   if(!document.getElementById('cloudBadgeCss')){
@@ -1189,8 +1193,11 @@ function cloudApply(st){
   if(!st) return;
   /* não atropela edição de quadra em andamento — guarda e aplica ao terminar */
   if(window._qEditing){ _cloudPending=st; return; }
+  /* não aplica um estado MAIS ANTIGO sobre um mais novo (protege de push obsoleto/realtime) */
+  if(st.rev!=null && _cloudRev!=null && st.rev < _cloudRev){ return; }
   _cloudApplying=true;
   try{
+    if(st.rev!=null) _cloudRev=st.rev;
     if(st.data && typeof st.data==='object'){ data=st.data; try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} }
     if(st.qgeo && typeof st.qgeo==='object'){ QGEO=st.qgeo; saveQGEO(); }
     if(st.georef){ _geo=st.georef; saveGeoref(_geo); }
@@ -1204,15 +1211,16 @@ function cloudApply(st){
 }
 function cloudApplyPending(){ if(_cloudPending && !window._qEditing){ var p=_cloudPending; _cloudPending=null; cloudApply(p); } }
 function cloudSave(){
-  if(!cloudInit() || _cloudApplying) return;
+  if(!cloudInit() || _cloudApplying || !_cloudInitDone) return; /* só escreve depois de ter lido a nuvem */
   cloudBadge('saving');
+  _cloudRev=(_cloudRev||0)+1; /* nova revisão a cada gravação */
   try{
     SB.from('app_state').update({ state: cloudState(), updated_at: new Date().toISOString() }).eq('id',1)
       .then(function(res){ if(res && res.error){ cloudBadge('error'); } else { cloudBadge('saved'); } },
             function(){ cloudBadge('error'); });
   }catch(e){ cloudBadge('error'); }
 }
-function cloudSaveSoon(){ if(_cloudApplying) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
+function cloudSaveSoon(){ if(_cloudApplying || !_cloudInitDone) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
 function cloudSyncNow(){ if(!cloudInit()) return; clearTimeout(_cloudTimer); cloudSave(); }
 /* Puxa o estado atual da nuvem e aplica (não sobrescreve edição em andamento). */
 function cloudPull(){
@@ -1221,6 +1229,7 @@ function cloudPull(){
   try{
     SB.from('app_state').select('state').eq('id',1).single().then(function(res){
       var st = res && res.data && res.data.state;
+      _cloudInitDone=true; /* já lemos a nuvem -> a partir de agora pode escrever */
       if(st && st.data && Object.keys(st.data).length){ cloudApply(st); }
       cloudBadge('saved');
     }, function(){ cloudBadge('offline'); });
@@ -1230,6 +1239,7 @@ function cloudPull(){
    senão, puxa o mais recente da nuvem. E garante o realtime vivo. */
 function cloudResync(){
   if(!cloudInit()) return;
+  if(!_cloudInitDone){ cloudPull(); cloudSubscribe(); return; } /* ainda não leu a nuvem -> só puxa */
   if(_cloudTimer){ cloudSyncNow(); }
   else { cloudPull(); }
   cloudSubscribe();
@@ -1253,8 +1263,9 @@ function cloudStart(){
     SB.from('app_state').select('state').eq('id',1).single().then(function(res){
       if(res && res.error){ cloudBadge('error'); }
       var st = res && res.data && res.data.state;
+      _cloudInitDone=true; /* leu a nuvem -> libera escrita (nunca empurra dados velhos antes de ler) */
       if(st && st.data && Object.keys(st.data).length){ cloudApply(st); cloudBadge('saved'); }
-      else { cloudSave(); }
+      else { cloudSave(); } /* nuvem vazia -> semeia */
       cloudSubscribe();
     }, function(){ cloudBadge('offline'); });
   }catch(e){ cloudBadge('offline'); }
