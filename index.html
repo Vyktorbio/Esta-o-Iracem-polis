@@ -1471,7 +1471,7 @@ function closeDetail(){document.getElementById("dOvl").classList.remove("open");
 function openE(id){
   closeDetail();curE=id;
   var d=data[id]||{cultura:"",cultivar:"",plantio:"",area:""};
-  var opts="";for(var i=0;i<CL.length;i++){opts+='<option value="'+esc(CQPOS[i])+'" '+(d.cultura===CQPOS[i]?"selected":"")+'>'+esc(CQPOS[i])+'</option>'}
+  var opts="";for(var i=0;i<CL.length;i++){opts+='<option value="'+esc(CL[i])+'" '+(d.cultura===CL[i]?"selected":"")+'>'+esc(CL[i])+'</option>'}
   document.getElementById("ePnl").innerHTML='<div class="edit-title">EDITAR QUADRA</div><div class="edit-id">'+id+'</div><label class="e-lbl">CULTURA</label><select id="ec" class="e-inp"><option value="">\u2014 selecionar \u2014</option>'+opts+'</select><label class="e-lbl">CULTIVAR</label><input id="ev" class="e-inp" value="'+esc(d.cultivar||"")+'" placeholder="Ex: BMX Nexus I2X"><label class="e-lbl">DATA DE PLANTIO</label><input id="ep" class="e-inp" value="'+esc(d.plantio||"")+'" placeholder="dd/mm/aaaa"><label class="e-lbl">\u00c1REA (HA)</label><input id="ea" class="e-inp" value="'+(d.area||"")+'" placeholder="1.0" type="number" step="0.01"><div class="e-btns"><button class="e-btn e-save" onclick="saveE()">SALVAR</button><button class="e-btn e-cancel" onclick="closeEdit()">CANCELAR</button></div>';
   document.getElementById("eOvl").classList.add("open");
 }
