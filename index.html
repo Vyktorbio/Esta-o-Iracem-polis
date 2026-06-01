@@ -384,6 +384,89 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 .gps-dot div{width:20px;height:20px;border-radius:50%;background:#2196f3;border:3px solid #fff;animation:gpspulse 1.6s infinite}
 @keyframes gpspulse{0%,100%{box-shadow:0 0 0 2px rgba(33,150,243,.5),0 0 0 5px rgba(33,150,243,.25)}50%{box-shadow:0 0 0 2px rgba(33,150,243,.5),0 0 0 15px rgba(33,150,243,0)}}
 </style>
+<style id="proTheme">
+/* ============================================================
+   TEMA PROFISSIONAL — tokens + refinamentos (sobrepõe o acima)
+   ============================================================ */
+:root{
+  --bg:#0a0e0c; --surface:#101613; --surface-2:#0c1210; --surface-3:#161e1a;
+  --border:#26322b; --border-soft:#1a221d;
+  --text:#e8efe9; --text-2:#9fb1a5; --text-3:#6d7f73;
+  --accent:#37d684; --accent-d:#1f8a52; --accent-deep:#103225; --accent-soft:rgba(55,214,132,.13);
+  --info:#5aa9e6; --warn:#f4b34d; --danger:#ff6b6b;
+  --radius:14px; --radius-sm:11px; --pill:999px;
+  --shadow:0 18px 54px rgba(0,0,0,.58); --shadow-sm:0 8px 26px rgba(0,0,0,.46);
+  --font:-apple-system,'SF Pro Text','Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+}
+html,body{background:var(--bg)}
+body{font-family:var(--font);color:var(--text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+
+/* ---- Header ---- */
+.top-bar{background:linear-gradient(180deg,#0f1512,#0a0f0d);border-bottom:1px solid var(--border-soft);padding:9px 16px;box-shadow:0 1px 0 rgba(255,255,255,.02),0 6px 18px rgba(0,0,0,.25)}
+.top-bar h1{font-size:15px;font-weight:800;letter-spacing:.4px;color:#f2f7f3}
+.top-bar-sub{font-size:8px;color:var(--accent);opacity:.9;letter-spacing:3.2px;font-weight:700}
+.top-bar-info{color:var(--text-3);font-weight:500;font-size:11px}
+
+/* ---- Botões pequenos (HOJE / AGENDA / busca) ---- */
+.btn-sm{background:var(--surface-3);border:1px solid var(--border);color:var(--text-2);border-radius:9px;padding:6px 12px;font-size:10px;letter-spacing:.6px;font-weight:700;transition:background .15s,border-color .15s,color .15s}
+.btn-sm:hover{background:#1d2721;border-color:#33453a;color:var(--text)}
+.btn-sm.active{background:var(--accent-deep);border-color:var(--accent-d);color:var(--accent)}
+.today-badge{background:var(--accent-deep);color:var(--accent);border-radius:var(--pill);font-weight:800}
+
+/* ---- Controles do Leaflet ---- */
+.leaflet-bar{border:none!important;box-shadow:var(--shadow-sm)!important;border-radius:11px!important;overflow:hidden}
+.leaflet-bar a{background:rgba(16,22,19,.92)!important;color:var(--text)!important;border-bottom:1px solid var(--border-soft)!important;width:34px;height:34px;line-height:34px;font-size:18px;backdrop-filter:blur(10px)}
+.leaflet-bar a:hover{background:rgba(28,38,32,.96)!important;color:var(--accent)!important}
+.leaflet-control-attribution{background:rgba(10,15,12,.6)!important;color:var(--text-3)!important;border-radius:7px 0 0 0;padding:2px 7px}
+.leaflet-control-attribution a{color:var(--text-2)!important}
+.leaflet-control-scale-line{background:rgba(16,22,19,.78)!important;color:var(--text)!important;border:1px solid var(--border)!important;border-top:none;border-radius:0 5px 5px 0;font-weight:600}
+
+/* ---- Dock de botões (NDVI / GPS / Menu) ---- */
+.toolbar-extra{bottom:16px;right:16px;gap:9px}
+.toolbar-extra button{background:rgba(15,21,18,.85);border:1px solid var(--border);color:var(--text);border-radius:13px;padding:11px 16px;font-size:13px;font-weight:600;letter-spacing:.2px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:var(--shadow-sm);transition:background .15s,border-color .15s,transform .07s}
+.toolbar-extra button:hover{background:rgba(27,37,31,.95);border-color:#36473c}
+.toolbar-extra button:active{transform:translateY(1px)}
+.toolbar-extra button[onclick*="toggleNdvi"]{color:var(--accent);border-color:#244a36}
+#menuBtn{color:var(--text-2)}
+
+/* ---- Painéis (unifica superfícies) ---- */
+.panel,.edit-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.ndvi-panel,.gr-panel{background:rgba(15,21,18,.97);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.overlay{background:rgba(4,7,5,.74);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+.gr-title,.ndvi-panel .gr-title{color:var(--accent);letter-spacing:2px;font-size:11px}
+.edit-title{color:var(--accent)}
+
+/* ---- Inputs ---- */
+.e-inp,.gr-ctl select,.search-box input,.se-field input,.se-field select,.se-field textarea{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:9px}
+.e-inp:focus,.search-box input:focus,.se-field input:focus{border-color:var(--accent-d);outline:none}
+.gr-ctl input[type=range]{accent-color:var(--accent)}
+.loc-box input:focus,.loc-modal input:focus{border-color:var(--accent-d)!important;outline:none;box-shadow:0 0 0 2px var(--accent-soft)}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
+
+/* ---- Botões "verdes" -> emerald coeso ---- */
+.gr-ok,.e-save,.btn-save,.today-card-quick,.se-add-trat,.sd-add{background:linear-gradient(180deg,#1f9a5d,#178048);color:#eafff2;border:none}
+.gr-ok:hover,.e-save:hover,.btn-save:hover,.today-card-quick:hover{filter:brightness(1.08)}
+.p-btn-edit,.studies-add,.eval-add-btn,.studies-add{background:var(--accent-soft);color:var(--accent);border:1px solid #244a36}
+.ndvi-ix.on{background:var(--accent-deep);color:#bff3d4;border-color:var(--accent-d)}
+.gr-cancel,.e-cancel,.btn-cancel,.p-btn-close{background:#1b211d;color:var(--text-2);border:1px solid var(--border)}
+.gr-reset{background:#2a2418;color:#e0bd72;border:none}
+
+/* ---- Rótulos das quadras (mais nítidos) ---- */
+.q-label .q-id{font-weight:800;letter-spacing:.2px}
+.q-ndvi{background:rgba(10,15,12,.82);border-color:var(--border)}
+
+/* ---- NDVI: índices quebram linha (não estouram no mobile) ---- */
+.ndvi-ixrow{flex-wrap:wrap}
+.ndvi-ix{flex:1 1 44px;min-width:44px}
+.ndvi-panel{top:auto;bottom:78px;left:12px;max-height:calc(100vh - 150px);overflow-y:auto}
+.gr-panel{max-height:calc(100vh - 40px);overflow-y:auto}
+
+/* ---- Scrollbars discretas ---- */
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:#2a352e;border-radius:6px;border:2px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:#36463c;border:2px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-track{background:transparent}
+</style>
 </head>
 <body>
 <div class="top-bar">
@@ -879,7 +962,7 @@ function setLocalAtivo(id){
 }
 /* ---- UI: chip do local + menu + modal "Novo local" (busca geocoder) ---- */
 function _locCss(){ if(document.getElementById('locCss'))return; var s=document.createElement('style'); s.id='locCss';
-  s.textContent='.loc-chip{display:inline-flex;align-items:center;gap:5px;margin-top:4px;background:#111811;border:1px solid #244024;color:#9ac49a;padding:3px 9px;border-radius:999px;font:600 11px/1 system-ui,sans-serif;cursor:pointer;max-width:78vw}.loc-chip:hover{background:#1a2a1a}.loc-chip b{color:#cfe6cf;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}.loc-chip .car{color:#6a9a6a;font-size:9px}.loc-chip .sub{color:#6a8a6a;font-weight:600}'+
+  s.textContent='.loc-chip{display:inline-flex;align-items:center;gap:6px;margin-top:5px;background:var(--surface-3,#161e1a);border:1px solid var(--border,#26322b);color:var(--accent,#37d684);padding:5px 11px;border-radius:999px;font:600 11px/1 -apple-system,system-ui,sans-serif;cursor:pointer;max-width:78vw;white-space:nowrap;transition:background .15s,border-color .15s}.loc-chip:hover{background:#1d2721;border-color:#33453a}.loc-chip b{color:#eaf3ed;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:44vw}.loc-chip .car{color:var(--text-3,#6d7f73);font-size:9px}.loc-chip .sub{color:var(--text-3,#6d7f73);font-weight:600}'+
   '.loc-menu{position:fixed;z-index:1600;background:#0e120e;border:1px solid #2a3a2a;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.6);min-width:230px;max-width:86vw;overflow:hidden;font:13px system-ui,sans-serif}.loc-mi{padding:9px 12px;color:#cfe0cf;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}.loc-mi:hover{background:#16241a}.loc-mi.on{background:#15301a}.loc-mi .sub{color:#6a8a6a;font-size:11px;display:flex;align-items:center;gap:6px}.loc-sep{height:1px;background:#1e2e1e}.loc-new{color:#9ac49a;font-weight:700}.loc-x{color:#7a5a5a;font-size:13px;padding:0 3px;cursor:pointer}.loc-x:hover{color:#ff8a80}'+
   '.loc-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1700;display:none;align-items:center;justify-content:center;padding:16px}.loc-box{background:#0e120e;border:1px solid #2a3a2a;border-radius:14px;max-width:440px;width:100%;padding:16px;font:13px system-ui,sans-serif;color:#dfeadf;box-sizing:border-box}.loc-box h3{margin:0 0 6px;font-size:15px;color:#cfe6cf}.loc-box label{display:block;font-size:11px;color:#8aa88a;margin:10px 0 3px;font-weight:600;letter-spacing:.4px}.loc-box input{width:100%;box-sizing:border-box;background:#0a0e0a;border:1px solid #2a3a2a;border-radius:8px;color:#eaf0ea;padding:9px;font-size:14px}.loc-box .row{display:flex;gap:8px}.loc-btn{flex:1;border:none;border-radius:9px;padding:10px;font-weight:700;cursor:pointer;font-size:13px}.loc-ok{background:#1f5a2a;color:#eafaea}.loc-ok:hover{background:#246a31}.loc-cancel{background:#222;color:#bbb}.loc-2nd{background:#16301c;color:#9ac49a}.loc-res{margin-top:6px;max-height:168px;overflow:auto}.loc-ri{padding:8px;border:1px solid #1e2e1e;border-radius:8px;margin-top:5px;cursor:pointer;font-size:12px;color:#cfe0cf}.loc-ri:hover{background:#16241a}';
   document.head.appendChild(s);
@@ -1093,7 +1176,7 @@ function cloudState(){ ensureQGEO(); ensureLocais(); return { data:data, qgeo:QG
 function cloudBadge(kind,txt){
   if(!document.getElementById('cloudBadgeCss')){
     var s=document.createElement('style'); s.id='cloudBadgeCss';
-    s.textContent='.cloud-badge{position:fixed;left:50%;transform:translateX(-50%);bottom:62px;z-index:1400;font:600 12px/1 system-ui,-apple-system,sans-serif;padding:6px 12px;border-radius:999px;color:#e9e9e9;background:rgba(22,24,22,.88);border:1px solid #3a3a3a;box-shadow:0 2px 10px rgba(0,0,0,.45);cursor:pointer;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);transition:opacity .5s;user-select:none}.cb-saved{opacity:.5}.cb-saving{color:#d3e2d3}.cb-error{color:#ffb3a8;border-color:#7a2b22;opacity:1}.cb-offline{color:#dccd8c;border-color:#5a4d1f;opacity:1}';
+    s.textContent='.cloud-badge{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:900;font:600 11px/1 -apple-system,system-ui,sans-serif;letter-spacing:.3px;padding:6px 13px;border-radius:999px;color:#cfe0d4;background:rgba(15,21,18,.9);border:1px solid #26322b;box-shadow:0 6px 22px rgba(0,0,0,.46);cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:opacity .5s;user-select:none}.cb-saved{opacity:.45}.cb-saving{color:#bff3d4}.cb-error{color:#ffb3a8;border-color:#7a2b22;opacity:1}.cb-offline{color:#dccd8c;border-color:#5a4d1f;opacity:1}';
     document.head.appendChild(s);
   }
   var el=document.getElementById('cloudBadge');
