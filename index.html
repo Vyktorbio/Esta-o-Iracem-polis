@@ -351,6 +351,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 .gr-cancel{background:#222;color:#999}
 .gr-handle .gr-h{width:26px;height:26px;border-radius:50%;background:#ffce00;color:#3a2e00;font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.7);cursor:grab}
 .gr-handle .gr-h.gr-move{background:#42a5f5;color:#06263f;font-size:13px;cursor:move}
+.gr-handle .gr-h.gr-rot{background:#ffce00;color:#3a2e00;font-size:15px;cursor:grab}
 .v-handle div{width:16px;height:16px;border-radius:50%;background:#ffce00;border:2px solid #1a1a1a;box-shadow:0 0 0 1.5px #fff,0 1px 3px rgba(0,0,0,.6);cursor:move}
 .v-mid div{width:13px;height:13px;border-radius:50%;background:rgba(255,255,255,.55);border:1px solid #333;color:#222;font-size:11px;font-weight:800;line-height:11px;text-align:center;cursor:copy}
 /* Painel NDVI */
@@ -819,14 +820,31 @@ function initMap(){
 }
 
 /* ---- R\u00e9gua de escala: refer\u00eancia de 1 hectare (quadrado 100\u00d7100 m) ---- */
-var _haRef=null;
+/* R\u00e9gua de 1 ha (100\u00d7100 m) \u2014 m\u00f3vel (pegador central) e rotacion\u00e1vel (pegador amarelo) */
+var _haRef=null, _haState=null, _haHandles=null;
+function haCorners(){ var g=_haState, ca=Math.cos(g.ang), sa=Math.sin(g.ang), m=grMeters(g.clat);
+  function pt(sx,sy){ var east=sx*50*ca+sy*50*(-sa), north=sx*50*sa+sy*50*ca; return [g.clat+north/m.mlat, g.clng+east/m.mlng]; }
+  return [pt(-1,1),pt(1,1),pt(1,-1),pt(-1,-1)]; }
+function haRotPos(){ var g=_haState, m=grMeters(g.clat), east=1.5*50*(-Math.sin(g.ang)), north=1.5*50*Math.cos(g.ang);
+  return [g.clat+north/m.mlat, g.clng+east/m.mlng]; }
+function haUpdate(){ if(_haRef) _haRef.setLatLngs(haCorners()); if(_haHandles){ _haHandles[0].setLatLng([_haState.clat,_haState.clng]); _haHandles[1].setLatLng(haRotPos()); } }
+function haRemove(){ if(_haRef){ _map.removeLayer(_haRef); _haRef=null; } if(_haHandles){ _haHandles.forEach(function(h){ try{_map.removeLayer(h);}catch(e){} }); _haHandles=null; } _haState=null; }
 function toggleHaRef(){
   if(!_map) return;
   var b=document.getElementById('haRefBtn');
-  if(_haRef){ _map.removeLayer(_haRef); _haRef=null; if(b)b.classList.remove('on'); return; }
-  var c=_map.getCenter(), m=grMeters(c.lat), dLat=50/m.mlat, dLng=50/m.mlng; /* 1 ha = 100 m x 100 m */
-  _haRef=LF.rectangle([[c.lat-dLat,c.lng-dLng],[c.lat+dLat,c.lng+dLng]],{color:'#fff',weight:1.5,dashArray:'5,4',fill:false,interactive:false}).addTo(_map);
+  if(_haRef){ haRemove(); if(b)b.classList.remove('on'); return; }
+  var c=_map.getCenter(); _haState={clat:c.lat, clng:c.lng, ang:0};
+  _haRef=LF.polygon(haCorners(),{color:'#fff',weight:1.5,dashArray:'5,4',fill:false,interactive:false}).addTo(_map);
   _haRef.bindTooltip('1 ha (100\u00d7100 m)',{permanent:true,direction:'center',className:'ha-tip'}).openTooltip();
+  var mv=LF.marker([_haState.clat,_haState.clng],{draggable:true,zIndexOffset:1000,
+    icon:LF.divIcon({className:'gr-handle',html:'<div class="gr-h gr-move">&#10010;</div>',iconSize:[32,32],iconAnchor:[16,16]})}).addTo(_map);
+  mv.on('drag',function(){ var p=mv.getLatLng(); _haState.clat=p.lat; _haState.clng=p.lng; haUpdate(); });
+  var rot=LF.marker(haRotPos(),{draggable:true,zIndexOffset:1000,
+    icon:LF.divIcon({className:'gr-handle',html:'<div class="gr-h gr-rot">&#8635;</div>',iconSize:[28,28],iconAnchor:[14,14]})}).addTo(_map);
+  rot.on('drag',function(){ var p=rot.getLatLng(), m=grMeters(_haState.clat);
+    var east=(p.lng-_haState.clng)*m.mlng, north=(p.lat-_haState.clat)*m.mlat;
+    _haState.ang=Math.atan2(-east, north); haUpdate(); });
+  _haHandles=[mv,rot];
   if(b)b.classList.add('on');
 }
 function addHaControl(){
