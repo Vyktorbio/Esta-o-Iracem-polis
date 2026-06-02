@@ -1437,9 +1437,19 @@ var _ndviMoveT=null;
 function pointInRing(x,y,ring){ var inside=false,i,j;
   for(i=0,j=ring.length-1;i<ring.length;j=i++){ var xi=ring[i][0],yi=ring[i][1],xj=ring[j][0],yj=ring[j][1];
     if(((yi>y)!=(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside; } return inside; }
+/* Largura ideal (px) p/ amostrar o bbox perto do nativo do Sentinel-2 (~10 m), com leve
+   superamostragem p/ suavizar; teto = máx da Process API (2500). Evita subamostrar áreas grandes. */
+function ndviPx(bb){
+  try{
+    var w=bb[0], s=bb[1], e=bb[2], n=bb[3], midLat=(s+n)/2;
+    var mWidth=Math.abs(e-w)*111320*Math.cos(midLat*Math.PI/180);
+    var px=Math.round(mWidth/10*1.6);
+    return Math.max(1024, Math.min(2500, px||1024));
+  }catch(_e){ return 1024; }
+}
 function computeQuadraMeans(){
   var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
-  fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width=1024&raw=1')
+  fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb)+'&raw=1')
    .then(function(r){ return r.ok?r.blob():null; })
    .then(function(blob){ if(!blob) return;
      var bu=URL.createObjectURL(blob), img=new Image();
@@ -1594,7 +1604,7 @@ function ndviLoadImage(){
   if(!ndviIndex || !ndviDate) return;
   var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
   ndviStatus('Carregando '+ndviIndex+' de '+ndviDate+'…');
-  fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width=1024')
+  fetch(NDVI_PROXY+'/index?index='+ndviIndex+'&date='+ndviDate+'&bbox='+bb.join(',')+'&width='+ndviPx(bb))
    .then(function(r){ if(r.ok) return r.blob(); return r.json().then(function(j){ throw (j.error||'erro'); }); })
    .then(function(blob){
      var bu=URL.createObjectURL(blob), img=new Image();
