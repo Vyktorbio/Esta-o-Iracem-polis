@@ -586,7 +586,7 @@ html,body{background:var(--bg)} body{color:var(--text)}
 
 /* Componentes injetados via JS (vêm depois no cascade -> !important) */
 .cloud-badge{background:rgba(255,255,255,.92)!important;color:#3a463f!important;border-color:var(--border)!important}
-.main-menu{background:#fff!important;border-color:var(--border)!important} .main-menu button{color:#222b26!important} .main-menu button:hover{background:#eef3f0!important} .main-menu .mm-sep{background:var(--border)!important} .main-menu .mm-user{color:var(--text-3)!important}
+.main-menu{background:#fff!important;border-color:var(--border)!important} .main-menu button{color:#222b26!important} .main-menu button:hover{background:#eef3f0!important} .main-menu .mm-sep{background:var(--border)!important} .main-menu .mm-user{color:var(--text-3)!important} .main-menu .mm-install{color:var(--accent-d)!important;font-weight:800!important}
 .ha-ctl button{background:rgba(255,255,255,.95)!important;color:#28312c!important;border-color:var(--border)!important} .ha-tip{background:rgba(255,255,255,.9)!important;color:#28312c!important}
 .loc-menu{background:#fff!important;border-color:var(--border)!important} .loc-mi{color:#222b26!important} .loc-mi:hover{background:#eef3f0!important} .loc-mi.on{background:var(--accent-deep)!important} .loc-mi .sub{color:var(--text-3)!important} .loc-sep{background:var(--border)!important}
 .loc-modal{background:rgba(40,52,46,.5)!important} .loc-box{background:#fff!important;color:var(--text)!important} .loc-ri{border-color:var(--border)!important;color:var(--text)!important} .loc-ri:hover{background:#eef3f0!important}
@@ -1228,11 +1228,24 @@ function _menuCss(){ if(document.getElementById('menuCss'))return; var s=documen
 }
 function closeMainMenu(){ var m=document.getElementById('mainMenu'); if(m) m.remove(); document.removeEventListener('click', _mainMenuOutside, true); }
 function _mainMenuOutside(e){ var m=document.getElementById('mainMenu'), b=document.getElementById('menuBtn'); if(m && !m.contains(e.target) && b && !b.contains(e.target)) closeMainMenu(); }
+/* ---- Instalação do app (PWA) ---- */
+var _deferredPrompt=null;
+window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); _deferredPrompt=e; });
+window.addEventListener('appinstalled', function(){ _deferredPrompt=null; });
+function isStandalone(){ try{ return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true; }catch(e){ return false; } }
+function isiOS(){ return /iphone|ipad|ipod/i.test(navigator.userAgent||''); }
+function installApp(){
+  if(typeof closeMainMenu==='function') closeMainMenu();
+  if(_deferredPrompt){ _deferredPrompt.prompt(); try{ _deferredPrompt.userChoice.then(function(){ _deferredPrompt=null; }); }catch(e){} return; }
+  if(isiOS()){ alert('📲 Instalar no iPhone:\n\n1) Abra este site no SAFARI (não dentro do WhatsApp/Instagram)\n2) Toque em Compartilhar (o quadrado com a seta ↑, na barra de baixo)\n3) Role e toque em "Adicionar à Tela de Início"\n4) Toque em "Adicionar"\n\nPronto: vira um ícone na sua tela.'); return; }
+  alert('📲 Instalar no Android:\n\n1) Abra este site no CHROME (não dentro do WhatsApp/Instagram)\n2) Toque no menu ⋮ (3 pontinhos, canto de cima)\n3) Toque em "Instalar app" (ou "Adicionar à tela inicial")\n4) Confirme.');
+}
 function toggleMainMenu(){
   if(document.getElementById('mainMenu')){ closeMainMenu(); return; }
   _menuCss();
   var m=document.createElement('div'); m.id='mainMenu'; m.className='main-menu';
   m.innerHTML=
+    (!isStandalone()?'<button class="mm-install" onclick="installApp()">📲 Instalar app</button><div class="mm-sep"></div>':'')+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">✏️ Editar quadras</button>'+
     '<button onclick="closeMainMenu();startGeoref()">📍 Alinhar mapa</button>'+
     '<div class="mm-sep"></div>'+
