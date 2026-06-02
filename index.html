@@ -628,7 +628,6 @@ html,body{background:var(--bg)} body{color:var(--text)}
 <div class="toolbar-extra">
 <button onclick="toggleNdvi()" title="Camadas NDVI / NDRE / GNDVI (Sentinel-2)">🛰️ NDVI</button>
 <button onclick="locateMe()" title="Mostrar minha localização (GPS)">📍 GPS</button>
-<button id="menuBtn" onclick="toggleMainMenu()" title="Ferramentas: editar quadras, alinhar, backup, importar">☰ Menu</button>
 <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">
 </div>
 
@@ -920,6 +919,7 @@ function initMap(){
   try{ LF.control.scale({ metric:true, imperial:false, maxWidth:150, position:'bottomleft' }).addTo(_map); }catch(e){}
   addHaControl();
   addRotateControl();
+  addMenuControl();
   setTimeout(function(){ try{ _map.invalidateSize(); }catch(e){} }, 200);
   window.addEventListener('resize', function(){ try{ _map.invalidateSize(); }catch(e){} });
   _geo = loadGeoref();
@@ -970,7 +970,7 @@ function addRotateControl(){
   if(!document.getElementById('rotCtlCss')){ var s=document.createElement('style'); s.id='rotCtlCss';
     s.textContent='.rot-ctl{display:flex;flex-direction:column;gap:5px}.rot-ctl button{width:36px;height:36px;border:1px solid var(--border,#26322b);border-radius:10px;background:rgba(15,21,18,.92);color:#cfe0d4;font-size:17px;font-weight:700;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.4);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);line-height:1}.rot-ctl button:hover{background:rgba(28,38,32,.96);color:var(--accent,#37d684)}.rot-ctl .rot-n{font-size:12px;letter-spacing:.5px}';
     document.head.appendChild(s); }
-  var C=LF.control({position:'topright'});
+  var C=LF.control({position:'topleft'});
   C.onAdd=function(){
     var d=LF.DomUtil.create('div','rot-ctl');
     d.innerHTML='<button class="rot-l" title="Girar \u00e0 esquerda">\u27f2</button><button class="rot-n" title="Apontar para o Norte (0\u00b0)">N</button><button class="rot-r" title="Girar \u00e0 direita">\u27f3</button>';
@@ -978,6 +978,19 @@ function addRotateControl(){
     d.querySelector('.rot-l').onclick=function(){ _map.setBearing((_map.getBearing()||0)+15); };
     d.querySelector('.rot-n').onclick=function(){ _map.setBearing(0); };
     d.querySelector('.rot-r').onclick=function(){ _map.setBearing((_map.getBearing()||0)-15); };
+    return d;
+  };
+  C.addTo(_map);
+}
+/* ---- Bot\u00e3o \u2630 Menu no canto superior direito do mapa ---- */
+function addMenuControl(){
+  if(!_map || _map.__menuCtl) return; _map.__menuCtl=true;
+  var C=LF.control({position:'topright'});
+  C.onAdd=function(){
+    var d=LF.DomUtil.create('div','rot-ctl menu-ctl');
+    d.innerHTML='<button id="menuBtn" title="Menu \u2014 ferramentas e instalar o app">\u2630</button>';
+    LF.DomEvent.disableClickPropagation(d); LF.DomEvent.disableScrollPropagation(d);
+    d.querySelector('button').onclick=toggleMainMenu;
     return d;
   };
   C.addTo(_map);
@@ -1253,6 +1266,9 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">📥 Importar</button>'+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">🚪 Sair</button>'):'');
   document.body.appendChild(m);
+  /* abre logo abaixo do botão ☰ (canto superior direito) */
+  var b=document.getElementById('menuBtn'), r=b?b.getBoundingClientRect():null;
+  if(r){ m.style.bottom='auto'; m.style.top=(r.bottom+6)+'px'; m.style.right=Math.max(8,(window.innerWidth-r.right))+'px'; m.style.maxHeight='calc(100vh - '+(r.bottom+18)+'px)'; m.style.overflowY='auto'; }
   setTimeout(function(){ document.addEventListener('click', _mainMenuOutside, true); },0);
 }
 
