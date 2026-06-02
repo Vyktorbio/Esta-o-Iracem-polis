@@ -1197,6 +1197,7 @@ function excluirLocal(id){
   delete LOCAIS[id];
   var resto=Object.keys(LOCAIS);
   if(localAtivo===id) localAtivo=resto[0];
+  _cloudAllowShrink=true; /* exclusão intencional: pode encolher */
   saveQGEO(); save(); saveLocais(); saveQLocal(); saveQNome();
   if(typeof updateAgendaBadge==='function') updateAgendaBadge();
   setLocalAtivo(localAtivo);
@@ -1383,7 +1384,9 @@ function deleteQuadra(){
   if(!editId) return;
   if(!confirm('Excluir a quadra "'+quadraNome(editId)+'" (forma e dados)? Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.')) return;
   delete QGEO[editId]; if(data[editId]) delete data[editId];
-  ensureLocais(); delete QLOCAL[editId]; if(QNOME) delete QNOME[editId]; saveQLocal(); saveQNome();
+  ensureLocais(); delete QLOCAL[editId]; if(QNOME) delete QNOME[editId];
+  _cloudAllowShrink=true; /* exclusão intencional */
+  saveQLocal(); saveQNome();
   saveQGEO(); save(); editId=null; render(); buildEditPanel(); updateAgendaBadge();
 }
 function buildEditPanel(){
@@ -1448,14 +1451,26 @@ function cloudApply(st){
   _cloudApplying=false;
 }
 function cloudApplyPending(){ if(_cloudPending && !window._qEditing){ var p=_cloudPending; _cloudPending=null; cloudApply(p); } }
+var _cloudAllowShrink=false; /* só true em exclusão intencional (local/quadra) */
 function cloudSave(){
   if(!cloudInit() || _cloudApplying || !_cloudInitDone) return; /* só escreve depois de ter lido a nuvem */
   cloudBadge('saving');
-  _cloudRev=(_cloudRev||0)+1; /* nova revisão a cada gravação */
+  var localState=cloudState();
+  var localLoc=Object.keys(localState.locais||{}).length, localQ=Object.keys(localState.qgeo||{}).length;
+  var allowShrink=_cloudAllowShrink; _cloudAllowShrink=false;
   try{
-    SB.from('app_state').update({ state: cloudState(), updated_at: new Date().toISOString() }).eq('id',1)
-      .then(function(res){ if(res && res.error){ cloudBadge('error'); } else { cloudBadge('saved'); } },
-            function(){ cloudBadge('error'); });
+    /* RELÊ a nuvem antes de gravar: nunca sobrescreve um estado mais novo nem ENCOLHE sem ser exclusão */
+    SB.from('app_state').select('state').eq('id',1).single().then(function(res){
+      var cs = res && res.data && res.data.state;
+      var cRev = (cs && cs.rev!=null) ? cs.rev : 0;
+      var cLoc = (cs && cs.locais) ? Object.keys(cs.locais).length : 0;
+      var cQ = (cs && cs.qgeo) ? Object.keys(cs.qgeo).length : 0;
+      if(_cloudRev!=null && cRev > _cloudRev){ if(cs) cloudApply(cs); cloudBadge('saved'); return; } /* nuvem mais nova */
+      if(!allowShrink && cs && (cLoc>localLoc || cQ>localQ)){ cloudApply(cs); cloudBadge('saved'); return; } /* não encolhe */
+      _cloudRev=(cRev||0)+1; localState.rev=_cloudRev;
+      SB.from('app_state').update({ state: localState, updated_at:new Date().toISOString() }).eq('id',1)
+        .then(function(r2){ cloudBadge(r2&&r2.error?'error':'saved'); }, function(){ cloudBadge('error'); });
+    }, function(){ cloudBadge('error'); });
   }catch(e){ cloudBadge('error'); }
 }
 function cloudSaveSoon(){ if(_cloudApplying || !_cloudInitDone) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
