@@ -10,3 +10,7 @@ services:
         sync: false
       - key: SH_CLIENT_SECRET
         sync: false
+      - key: ECOWITT_APP_KEY
+        sync: false
+      - key: ECOWITT_API_KEY
+        sync: false

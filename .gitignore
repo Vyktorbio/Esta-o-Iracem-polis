@@ -1,5 +1,7 @@
 # NUNCA versionar a credencial (segredo do Copernicus)
 ndvi-credenciais.json
+# NUNCA versionar a credencial da Ecowitt (Application Key + API Key)
+ecowitt-credenciais.json
 
 # Python / sistema
 __pycache__/

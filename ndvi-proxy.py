@@ -283,6 +283,101 @@ def do_dates(bbox, frm, to):
             best[dt] = cloud
     return [{"date": k, "cloud": best[k]} for k in sorted(best.keys(), reverse=True)]
 
+# ---------------------------------------------------------------- Ecowitt (estação meteorológica)
+ECOWITT_BASE = "https://api.ecowitt.net/api/v3"
+
+def load_ecowitt():
+    """Application Key + API Key da Ecowitt. Env (nuvem) ou ecowitt-credenciais.json (local). Segredo nunca no front."""
+    app = os.environ.get("ECOWITT_APP_KEY")
+    api = os.environ.get("ECOWITT_API_KEY")
+    if app and api:
+        return app, api
+    p = os.path.join(HERE, "ecowitt-credenciais.json")
+    if os.path.exists(p):
+        try:
+            d = json.load(open(p, encoding="utf-8"))
+            return (d.get("application_key") or d.get("app_key")), d.get("api_key")
+        except Exception as e:
+            print("Erro lendo ecowitt-credenciais.json:", e)
+    return None, None
+
+def ecowitt_get(path, params):
+    app, api = load_ecowitt()
+    if not app or not api:
+        raise RuntimeError("SEM_ECOWITT")
+    qs = dict(params or {})
+    qs["application_key"] = app
+    qs["api_key"] = api
+    url = ECOWITT_BASE + path + "?" + urllib.parse.urlencode(qs)
+    req = urllib.request.Request(url, headers={"User-Agent": "iracema-app"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        d = json.loads(r.read().decode())
+    if d.get("code") != 0:
+        raise RuntimeError("ECOWITT:%s:%s" % (d.get("code"), d.get("msg")))
+    return d.get("data")
+
+def do_estacoes():
+    d = ecowitt_get("/device/list", {"limit": 100}) or {}
+    out = []
+    for it in (d.get("list", []) if isinstance(d, dict) else []):
+        out.append({"name": it.get("name"), "mac": it.get("mac"),
+                    "lat": it.get("latitude"), "lng": it.get("longitude"),
+                    "type": it.get("stationtype")})
+    return out
+
+def _node(n):
+    """{time,unit,value} -> {value:float|str, unit:str}; converte value pra número quando dá."""
+    if not isinstance(n, dict):
+        return None
+    v = n.get("value")
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        pass
+    return {"value": v, "unit": n.get("unit", "")}
+
+def do_clima(mac):
+    """Tempo real de uma estação, achatado e em unidades métricas."""
+    d = ecowitt_get("/device/real_time", {
+        "mac": mac, "call_back": "all",
+        "temp_unitid": 1, "pressure_unitid": 3,
+        "wind_speed_unitid": 7, "rainfall_unitid": 12, "solar_irradiance_unitid": 16,
+    }) or {}
+    o = d.get("outdoor", {}) or {}
+    s = d.get("solar_and_uvi", {}) or {}
+    r = d.get("rainfall") or d.get("rainfall_piezo") or {}
+    w = d.get("wind", {}) or {}
+    p = d.get("pressure", {}) or {}
+    out = {
+        "mac": mac,
+        "temp": _node(o.get("temperature")),
+        "feels_like": _node(o.get("feels_like")),
+        "dew_point": _node(o.get("dew_point")),
+        "humidity": _node(o.get("humidity")),
+        "solar": _node(s.get("solar")),
+        "uvi": _node(s.get("uvi")),
+        "rain_rate": _node(r.get("rain_rate")),
+        "rain_day": _node(r.get("daily")),
+        "rain_week": _node(r.get("weekly")),
+        "rain_month": _node(r.get("monthly")),
+        "rain_year": _node(r.get("yearly")),
+        "wind_speed": _node(w.get("wind_speed")),
+        "wind_gust": _node(w.get("wind_gust")),
+        "wind_dir": _node(w.get("wind_direction")),
+        "pressure": _node(p.get("relative")),
+    }
+    # VPD vem em inHg na Ecowitt -> converte pra kPa (mais usado no agro)
+    vpd = _node(o.get("vpd"))
+    if vpd and isinstance(vpd.get("value"), float):
+        out["vpd"] = {"value": round(vpd["value"] * 3.38639, 2), "unit": "kPa"}
+    else:
+        out["vpd"] = vpd
+    try:
+        out["time"] = int((o.get("temperature") or {}).get("time"))
+    except Exception:
+        out["time"] = None
+    return out
+
 # ---------------------------------------------------------------- HTTP server
 class H(BaseHTTPRequestHandler):
     def _cors(self):
@@ -327,7 +422,12 @@ class H(BaseHTTPRequestHandler):
         try:
             if u.path == "/health":
                 cid, _ = load_creds()
-                return self._json({"ok": True, "hasCreds": bool(cid)})
+                eapp, _ = load_ecowitt()
+                return self._json({"ok": True, "hasCreds": bool(cid), "hasEcowitt": bool(eapp)})
+            if u.path == "/clima/estacoes":
+                return self._json(do_estacoes())
+            if u.path == "/clima":
+                return self._json(do_clima(q["mac"]))
             if u.path == "/dates":
                 bbox = [float(x) for x in q["bbox"].split(",")]
                 return self._json(do_dates(bbox, q["from"], q["to"]))
@@ -344,10 +444,15 @@ class H(BaseHTTPRequestHandler):
                 return self._json(do_point(float(q["lat"]), float(q["lng"]), q["date"]))
             self._json({"error": "rota desconhecida"}, 404)
         except RuntimeError as e:
-            if str(e) == "SEM_CREDENCIAL":
+            msg = str(e)
+            if msg == "SEM_CREDENCIAL":
                 self._json({"error": "Sem credencial. Crie ndvi-credenciais.json (client_id/client_secret)."}, 400)
+            elif msg == "SEM_ECOWITT":
+                self._json({"error": "Sem credencial Ecowitt no servidor (defina ECOWITT_APP_KEY e ECOWITT_API_KEY)."}, 400)
+            elif msg.startswith("ECOWITT:"):
+                self._json({"error": "Ecowitt: " + msg[len("ECOWITT:"):]}, 502)
             else:
-                self._json({"error": str(e)}, 500)
+                self._json({"error": msg}, 500)
         except urllib.error.HTTPError as e:
             try: detail = e.read().decode()[:500]
             except Exception: detail = ""

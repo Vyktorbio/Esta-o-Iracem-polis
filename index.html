@@ -631,6 +631,7 @@ body.map-full .top-bar,body.map-full .toolbar-extra,body.map-full .leaflet-contr
 <!-- Toolbar de backup -->
 <div class="toolbar-extra">
 <button onclick="toggleNdvi()" title="Camadas NDVI / NDRE / GNDVI (Sentinel-2)">🛰️ NDVI</button>
+<button onclick="toggleClima()" title="Clima ao vivo da estação meteorológica (Ecowitt)">🌦️ Clima</button>
 <button onclick="locateMe()" title="Mostrar minha localização (GPS)">📍 GPS</button>
 <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">
 </div>
@@ -1879,9 +1880,95 @@ function locateMe(){
     if(ndviIndex && ndviDate){ setTimeout(function(){ try{ ndviLoadImage(); }catch(e){} }, 400); }
   }, function(err){ alert('Não consegui o GPS.\\nObs.: abrindo o arquivo direto (file://) o navegador bloqueia o GPS — funciona via localhost/https ou no app instalado.\\n('+err.message+')'); }, {enableHighAccuracy:true, timeout:10000, maximumAge:5000});
 }
+/* ===================== CLIMA — estação meteorológica (Ecowitt) ===================== */
+var CLIMA_PROXY=NDVI_PROXY;
+var _climaStations=null, climaMac=null, _climaTimer=null;
+function _climaCss(){ if(document.getElementById('climaCss'))return; var s=document.createElement('style'); s.id='climaCss';
+  s.textContent='.clima-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0}'+
+  '.clima-card{background:var(--surface-2,#11210f);border:1px solid var(--border,#26322b);border-radius:10px;padding:8px 10px;min-width:0}'+
+  '.clima-card .lab{font-size:10px;color:var(--text-3,#8aa88a);font-weight:600;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+  '.clima-card .val{font-size:17px;font-weight:800;color:var(--text,#eaf3ed);margin-top:2px;line-height:1.1}'+
+  '.clima-card .val small{font-size:10px;font-weight:600;color:var(--text-3,#8aa88a)}'+
+  '.clima-temp{grid-column:1/3;display:flex;align-items:center;justify-content:space-between;gap:10px}'+
+  '.clima-temp .t{font-size:32px;font-weight:800;color:var(--text,#eaf3ed);line-height:1}'+
+  '.clima-foot{font-size:10px;color:var(--text-3,#7a8a7a);margin-top:2px;text-align:center}';
+  document.head.appendChild(s);
+}
+function _climaNorm(t){ return (t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,''); }
+function climaMatch(){
+  if(!_climaStations||!_climaStations.length) return null;
+  var nm=_climaNorm((LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'');
+  if(nm){
+    for(var i=0;i<_climaStations.length;i++){ var sn=_climaNorm(_climaStations[i].name); if(sn&&(sn.indexOf(nm)>=0||nm.indexOf(sn)>=0)) return _climaStations[i].mac; }
+    var toks=nm.match(/[a-z]{4,}/g)||[];
+    for(var j=0;j<_climaStations.length;j++){ var s2=_climaNorm(_climaStations[j].name);
+      for(var k=0;k<toks.length;k++){ if(s2.indexOf(toks[k])>=0) return _climaStations[j].mac; } }
+  }
+  return _climaStations[0].mac;
+}
+function toggleClima(){
+  var p=document.getElementById('climaPanel');
+  if(p&&p.style.display==='block'){ p.style.display='none'; if(_climaTimer){clearInterval(_climaTimer);_climaTimer=null;} return; }
+  var nv=document.getElementById('ndviPanel'); if(nv) nv.style.display='none';
+  _climaCss(); buildClimaPanel(); climaInit();
+}
+function buildClimaPanel(){
+  var p=document.getElementById('climaPanel');
+  if(!p){ p=document.createElement('div'); p.id='climaPanel'; p.className='ndvi-panel'; document.body.appendChild(p); }
+  var opts=_climaStations? _climaStations.map(function(st){ return '<option value="'+st.mac+'"'+(st.mac===climaMac?' selected':'')+'>'+esc(st.name)+'</option>'; }).join('') : '';
+  p.innerHTML='<div class="gr-title">🌦️ CLIMA (estação)</div>'+
+    (_climaStations? '<label class="gr-ctl"><span>Estação</span><select onchange="climaPick(this.value)">'+opts+'</select></label>' : '')+
+    '<div id="climaBody"></div>'+
+    '<div class="gr-btns"><button class="gr-cancel" onclick="toggleClima()">Fechar</button></div>';
+  p.style.display='block';
+}
+function climaSay(msg,cls){ var b=document.getElementById('climaBody'); if(b) b.innerHTML='<div class="ndvi-status'+(cls?' '+cls:'')+'" style="margin:8px 0;min-height:auto">'+esc(msg)+'</div>'; }
+function climaInit(){
+  if(_climaStations){ if(!climaMac) climaMac=climaMatch(); buildClimaPanel(); climaLoad(); return; }
+  climaSay('Conectando à estação…');
+  fetch(CLIMA_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){
+    if(!arr||arr.error){ climaSay((arr&&arr.error)||'Não consegui listar as estações.','err'); return; }
+    _climaStations=arr; climaMac=climaMatch(); buildClimaPanel(); climaLoad();
+  }).catch(function(){ climaSay('Servidor do clima fora do ar. Tente em alguns segundos (ele “acorda” na 1ª chamada).','err'); });
+}
+function climaPick(mac){ climaMac=mac; climaLoad(); }
+function climaLoad(){
+  if(!climaMac){ climaSay('Selecione uma estação.'); return; }
+  if(_climaTimer){ clearInterval(_climaTimer); _climaTimer=null; }
+  climaSay('Carregando dados ao vivo…');
+  fetch(CLIMA_PROXY+'/clima?mac='+encodeURIComponent(climaMac)).then(function(r){return r.json();}).then(function(d){
+    if(!d||d.error){ climaSay((d&&d.error)||'Erro ao ler a estação.','err'); return; }
+    climaRender(d);
+    _climaTimer=setInterval(function(){ var p=document.getElementById('climaPanel'); if(p&&p.style.display==='block') climaLoad(); else { clearInterval(_climaTimer); _climaTimer=null; } }, 300000);
+  }).catch(function(){ climaSay('Não consegui ler a estação agora.','err'); });
+}
+function _cval(n,dec){ if(!n||n.value==null||n.value==='') return '—'; var v=n.value; if(typeof v==='number'&&dec!=null) v=v.toFixed(dec); return v; }
+function _compass(deg){ if(deg==null) return ''; return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'][Math.round(deg/22.5)%16]; }
+function climaRender(d){
+  var b=document.getElementById('climaBody'); if(!b) return;
+  function card(lab,val,unit){ return '<div class="clima-card"><div class="lab">'+lab+'</div><div class="val">'+val+(unit?' <small>'+unit+'</small>':'')+'</div></div>'; }
+  var dir=(d.wind_dir&&d.wind_dir.value!=null)?Math.round(d.wind_dir.value):null;
+  var h='<div class="clima-grid">';
+  h+='<div class="clima-card clima-temp"><div><div class="lab">🌡️ Temperatura</div><div class="t">'+_cval(d.temp,1)+'°C</div></div>'+
+     '<div style="text-align:right"><div class="lab">Sensação</div><div class="val">'+_cval(d.feels_like,1)+'<small>°C</small></div></div></div>';
+  h+=card('💧 Umidade', _cval(d.humidity,0),'%');
+  h+=card('💦 Orvalho', _cval(d.dew_point,1),'°C');
+  h+=card('🌫️ VPD', _cval(d.vpd,2), (d.vpd&&d.vpd.unit)||'kPa');
+  h+=card('🔽 Pressão', _cval(d.pressure,0),'hPa');
+  h+=card('🌬️ Vento', _cval(d.wind_speed,1), 'km/h'+(dir!=null?' '+_compass(dir):''));
+  h+=card('💨 Rajada', _cval(d.wind_gust,1),'km/h');
+  h+=card('🌧️ Chuva hoje', _cval(d.rain_day,1),'mm');
+  h+=card('☀️ Radiação', _cval(d.solar,0),'W/m²');
+  h+='</div>';
+  h+='<div class="clima-grid" style="margin-top:0">'+card('Chuva semana', _cval(d.rain_week,1),'mm')+card('Chuva mês', _cval(d.rain_month,1),'mm')+'</div>';
+  var ts=d.time?new Date(d.time*1000):null;
+  h+='<div class="clima-foot">'+(ts?('atualizado '+ts.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})):'')+' · auto 5 min 🔄</div>';
+  b.innerHTML=h;
+}
 function toggleNdvi(){
   var p=document.getElementById('ndviPanel');
   if(p && p.style.display==='block'){ p.style.display='none'; return; }
+  var cp=document.getElementById('climaPanel'); if(cp) cp.style.display='none';
   if(!_map) initMap();
   ensureQGEO(); /* não bloqueia: o NDVI também funciona fora das quadras */
   if(_map && !_map.__ndviMove){ _map.__ndviMove=true; _map.on('moveend', ndviOnMove); }
