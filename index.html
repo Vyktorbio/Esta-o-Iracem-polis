@@ -1132,9 +1132,14 @@ function flyToLocal(id){
   var qs=quadrasDoLocal(id);
   if(qs.length){ var b=99,s=999,e=-99,n=-999;
     qs.forEach(function(q){ (QGEO[q]||[]).forEach(function(p){ if(p[0]<b)b=p[0]; if(p[0]>n)n=p[0]; if(p[1]<s)s=p[1]; if(p[1]>e)e=p[1]; }); });
-    if(b<=n&&s<=e){ try{ _map.fitBounds([[b,s],[n,e]],{padding:[50,50],maxZoom:18}); return; }catch(e2){} }
+    if(b<=n&&s<=e){
+      try{ if(_map.getBearing) _map.setBearing(0); }catch(e0){}
+      try{ _map.flyToBounds([[b,s],[n,e]],{padding:[60,60],maxZoom:18,duration:0.8}); return; }
+      catch(e2){ try{ _map.fitBounds([[b,s],[n,e]],{padding:[60,60],maxZoom:18}); return; }catch(e3){} }
+    }
   }
-  _map.setView(Lc.centro||ESTACAO_CENTER, Lc.zoom||16);
+  try{ _map.flyTo(Lc.centro||ESTACAO_CENTER, Lc.zoom||16, {duration:0.8}); }
+  catch(e4){ try{ _map.setView(Lc.centro||ESTACAO_CENTER, Lc.zoom||16); }catch(e5){} }
 }
 function setLocalAtivo(id){
   ensureLocais(); if(!LOCAIS[id]) return;
@@ -2135,7 +2140,8 @@ function openE(id){
   if(!_ecRows.length)_ecRows=[{cultura:'',cultivar:'',plantio:''}];
   var dl='<datalist id="clOpts">'+CL.map(function(c){return '<option value="'+esc(c)+'">';}).join('')+'</datalist>';
   document.getElementById("ePnl").innerHTML=
-    '<div class="edit-title">EDITAR QUADRA</div><div class="edit-id">'+esc(quadraNome(id))+'</div>'+dl+
+    '<div class="edit-title">EDITAR QUADRA</div>'+dl+
+    '<label class="e-lbl">NOME DA QUADRA</label><input id="eqnome" class="e-inp" value="'+esc(quadraNome(id))+'" placeholder="Ex.: A1" autocomplete="off">'+
     '<label class="e-lbl">CULTURAS</label><div id="ecRows"></div>'+
     '<button type="button" class="e-add-cult" onclick="ecAddRow()">+ Adicionar cultura</button>'+
     '<label class="e-lbl">\u00c1REA (HA)</label><input id="ea" class="e-inp" value="'+(d.area||"")+'" placeholder="1.0" type="number" step="0.01">'+
@@ -2146,6 +2152,15 @@ function openE(id){
 function closeEdit(){document.getElementById("eOvl").classList.remove("open");curE=null}
 function saveE(){
   if(!curE)return;
+  /* Renomear (atualiza só o nome de exibição; o id interno não muda) */
+  var novoNome=((document.getElementById('eqnome')||{}).value||'').trim();
+  if(novoNome && novoNome!==quadraNome(curE)){
+    ensureLocais();
+    var loc=QLOCAL[curE]||HOME_LOCAL;
+    var dup=quadrasDoLocal(loc).some(function(q){ return q!==curE && quadraNome(q).toLowerCase()===novoNome.toLowerCase(); });
+    if(dup){ alert('Já existe uma quadra chamada "'+novoNome+'" neste local.'); return; }
+    QNOME[curE]=novoNome; saveQNome();
+  }
   ecReadRows();
   var culturas=_ecRows.filter(function(c){return c.cultura;}).map(function(c){return {cultura:c.cultura,cultivar:(c.cultivar||'').trim(),plantio:(c.plantio||'').trim()};});
   var estudos = (data[curE]&&data[curE].estudos)||[];
