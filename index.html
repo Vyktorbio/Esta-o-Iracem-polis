@@ -585,7 +585,7 @@ html,body{background:var(--bg)} body{color:var(--text)}
 .auth-i::placeholder{color:#9aa49e}
 /* Tela cheia (só o mapa) */
 body.map-full .top-bar,body.map-full .toolbar-extra,body.map-full .leaflet-control-container,body.map-full #cloudBadge{display:none!important}
-.full-exit{position:fixed;top:10px;right:10px;z-index:2000;display:none;background:rgba(255,255,255,.92);border:1px solid var(--border,#dce2de);color:#222b26;border-radius:11px;padding:9px 13px;font:600 13px -apple-system,system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(30,50,40,.22);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.full-exit{position:fixed;top:8px;right:8px;z-index:2000;display:none;background:rgba(255,255,255,.92);border:1px solid var(--border,#dce2de);color:#222b26;border-radius:8px;padding:4px 8px;font:600 11px -apple-system,system-ui,sans-serif;cursor:pointer;box-shadow:0 3px 10px rgba(30,50,40,.18);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .full-exit:hover{background:#fff}
 
 /* Componentes injetados via JS (vêm depois no cascade -> !important) */
@@ -600,7 +600,7 @@ body.map-full .top-bar,body.map-full .toolbar-extra,body.map-full .leaflet-contr
 </head>
 <body>
 <div class="top-bar">
-<div><div class="top-bar-sub">Agricultura de precisão</div><h1>Imageamento Multiespectral</h1></div>
+<div><h1>Imageamento Multiespectral</h1></div>
 <div class="top-bar-right">
 <span class="top-bar-info" id="dateInfo"></span>
 <button class="btn-sm" id="btnAgenda" onclick="toggleAgenda()">AGENDA <span id="agendaBadge" style="color:#ff5252;font-weight:700"></span></button>
@@ -915,7 +915,8 @@ function polyCentroid(lls){ var sx=0,sy=0,n=lls.length; for(var i=0;i<n;i++){sy+
 
 function initMap(){
   if(_map) return;
-  _map = LF.map('map', { center:ESTACAO_CENTER, zoom:ESTACAO_ZOOM, zoomControl:true, maxZoom:21, rotate:true, touchRotate:true, rotateControl:false, bearing:0 });
+  _map = LF.map('map', { center:ESTACAO_CENTER, zoom:ESTACAO_ZOOM, zoomControl:true, maxZoom:21, rotate:true, touchRotate:true, rotateControl:false, bearing:0,
+    zoomSnap:0, zoomDelta:0.4, wheelDebounceTime:18, wheelPxPerZoomLevel:110, zoomAnimation:true });
   _baseSat = LF.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     { maxZoom:21, maxNativeZoom:19, attribution:'Imagery \u00a9 Esri, Maxar, Earthstar Geographics' }).addTo(_map);
   _qLayer = LF.layerGroup().addTo(_map);
@@ -979,9 +980,9 @@ function addRotateControl(){
     var d=LF.DomUtil.create('div','rot-ctl');
     d.innerHTML='<button class="rot-l" title="Girar \u00e0 esquerda">\u27f2</button><button class="rot-n" title="Apontar para o Norte (0\u00b0)">N</button><button class="rot-r" title="Girar \u00e0 direita">\u27f3</button>';
     LF.DomEvent.disableClickPropagation(d); LF.DomEvent.disableScrollPropagation(d);
-    d.querySelector('.rot-l').onclick=function(){ _map.setBearing((_map.getBearing()||0)+2); };
+    d.querySelector('.rot-l').onclick=function(){ _map.setBearing((_map.getBearing()||0)+1); };
     d.querySelector('.rot-n').onclick=function(){ _map.setBearing(0); };
-    d.querySelector('.rot-r').onclick=function(){ _map.setBearing((_map.getBearing()||0)-2); };
+    d.querySelector('.rot-r').onclick=function(){ _map.setBearing((_map.getBearing()||0)-1); };
     return d;
   };
   C.addTo(_map);
@@ -1305,7 +1306,7 @@ function toggleFullscreenMap(){
   var on=document.body.classList.toggle('map-full');
   var ex=document.getElementById('fullExit');
   if(on){
-    if(!ex){ ex=document.createElement('button'); ex.id='fullExit'; ex.className='full-exit'; ex.innerHTML='⤢ Sair da tela cheia'; ex.onclick=toggleFullscreenMap; document.body.appendChild(ex); }
+    if(!ex){ ex=document.createElement('button'); ex.id='fullExit'; ex.className='full-exit'; ex.innerHTML='⤢ Sair'; ex.onclick=toggleFullscreenMap; document.body.appendChild(ex); }
     ex.style.display='block';
   } else if(ex){ ex.style.display='none'; }
   setTimeout(function(){ try{ if(_map) _map.invalidateSize(); }catch(e){} }, 160);
