@@ -1136,12 +1136,16 @@ function flyToLocal(id){
   var qs=quadrasDoLocal(id);
   if(qs.length){ var b=99,s=999,e=-99,n=-999;
     qs.forEach(function(q){ (QGEO[q]||[]).forEach(function(p){ if(p[0]<b)b=p[0]; if(p[0]>n)n=p[0]; if(p[1]<s)s=p[1]; if(p[1]>e)e=p[1]; }); });
-    if(b<=n&&s<=e){
+    if(b<=n&&s<=e&&(n-b)<0.25&&(e-s)<0.25){
+      /* só enquadra nas quadras se elas estiverem juntas (< ~27 km). Se uma quadra
+         estiver fora do lugar, o bounds fica gigante e afastaria o zoom — nesse caso
+         caímos no centro cadastrado do local (abaixo). */
       try{ if(_map.getBearing) _map.setBearing(0); }catch(e0){}
       try{ _map.flyToBounds([[b,s],[n,e]],{padding:[60,60],maxZoom:18,duration:0.8}); return; }
       catch(e2){ try{ _map.fitBounds([[b,s],[n,e]],{padding:[60,60],maxZoom:18}); return; }catch(e3){} }
     }
   }
+  try{ if(_map.getBearing) _map.setBearing(0); }catch(eb){}
   try{ _map.flyTo(Lc.centro||ESTACAO_CENTER, Lc.zoom||16, {duration:0.8}); }
   catch(e4){ try{ _map.setView(Lc.centro||ESTACAO_CENTER, Lc.zoom||16); }catch(e5){} }
 }
