@@ -2167,7 +2167,14 @@ function buildStudyRecord(qid,s){
   if(s.aplicacoes.length){ L.push(''); L.push('APLICACOES'); L.push('Data\tBBCH\tObs');
     s.aplicacoes.slice().sort(byData).forEach(function(a){ L.push((isoToBR(a.data)||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||'')); }); }
   if(s.avaliacoes.length){ L.push(''); L.push('AVALIACOES'); L.push('Data\tTipo\tBBCH\tObs');
-    s.avaliacoes.slice().sort(byData).forEach(function(a){ L.push((isoToBR(a.data)||'')+'\t'+(a.tipo||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||'')); }); }
+    s.avaliacoes.slice().sort(byData).forEach(function(a){
+      L.push((isoToBR(a.data)||'')+'\t'+(a.tipo||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||''));
+      if(a.variaveis&&a.variaveis.length){
+        L.push('Trat\t'+a.variaveis.join('\t'));
+        s.tratamentos.forEach(function(t){ var row=(a.notas&&a.notas[t.id])||{};
+          L.push(t.id+'\t'+a.variaveis.map(function(v){return row[v]||'';}).join('\t')); });
+      }
+    }); }
   var ds=[]; if(s.dataInicio)ds.push(s.dataInicio);
   (s.aplicacoes||[]).forEach(function(a){ if(a.data)ds.push(a.data); });
   (s.avaliacoes||[]).forEach(function(a){ if(a.data)ds.push(a.data); });
@@ -2917,6 +2924,8 @@ function normalizeStudy(s){
       if(!a.tipo)a.tipo="";
       if(!a.bbch)a.bbch="";
       if(!a.obs)a.obs="";
+      if(!Array.isArray(a.variaveis))a.variaveis=[];
+      if(!a.notas||typeof a.notas!=="object")a.notas={};
       return a;
     });
   }else s.avaliacoes=[];
@@ -3085,6 +3094,7 @@ function openStudyDetail(qid,sid){
         h+='<div class="evento-bbch">BBCH '+esc(a.bbch)+(infoE?' · '+esc(infoE.fase):'')+'</div>';
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
+      h+=avGridHtml(a);
       h+='</div>';
     });
     h+='</div>';
@@ -3330,6 +3340,74 @@ function saveAplicacao(){
   openStudyDetail(curV,curSid);
 }
 
+/* ===== Grade de avaliação: tratamentos (linhas) × variáveis avaliadas (colunas dinâmicas) ===== */
+var _avGrid={variaveis:[],notas:{}};
+function _avCss(){ if(document.getElementById('avCss'))return; var s=document.createElement('style'); s.id='avCss';
+  s.textContent='.av-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:4px;padding-bottom:4px}'+
+  '.av-table{border-collapse:collapse;font-size:12px}'+
+  '.av-table th,.av-table td{border:1px solid var(--border,#2a3a2a);padding:4px 6px;text-align:center;white-space:nowrap}'+
+  '.av-table th{background:var(--surface-2,#11210f);color:var(--text-2,#9ab39a);font-weight:700}'+
+  '.av-tname{font-weight:700;color:var(--accent,#37d684);background:var(--surface-2,#11210f)}'+
+  '.av-cell{width:62px;box-sizing:border-box;background:var(--surface,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:6px;padding:5px;font-size:12px;text-align:center}'+
+  '.av-addcol{background:rgba(127,170,127,.15);border:1px solid #2a3a2a;color:#9ac49a;border-radius:7px;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}'+
+  '.av-delcol{background:none;border:none;color:#a77;cursor:pointer;font-size:13px;margin-left:5px;padding:0}.av-delcol:hover{color:#ff8a80}'+
+  '.av-hint{font-size:11px;color:#9a8;font-style:italic;margin:4px 0}.av-gridbtns{margin-top:6px}';
+  document.head.appendChild(s);
+}
+function _avTrats(){ var q=data[curV]||{}, st=(q.estudos||[]).find(function(s){return s.id===curSid;}); return (st&&st.tratamentos)||[]; }
+function renderAvGrid(){
+  _avCss(); var w=document.getElementById('avGridWrap'); if(!w) return;
+  var ts=_avTrats();
+  if(!ts.length){ w.innerHTML='<div class="av-hint">Cadastre os tratamentos do estudo (botão EDITAR) para lançar notas por tratamento.</div>'; return; }
+  var vs=_avGrid.variaveis;
+  var html='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th>';
+  vs.forEach(function(v){ html+='<th>'+esc(v)+'<button type="button" class="av-delcol" title="Remover coluna" onclick="avDelCol(\''+esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')">×</button></th>'; });
+  html+='<th><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna</button></th></tr></thead><tbody>';
+  ts.forEach(function(t){
+    var row=_avGrid.notas[t.id]||{};
+    html+='<tr><td class="av-tname" title="'+esc(t.produto||'')+'">'+esc(t.id)+'</td>';
+    vs.forEach(function(v){ html+='<td><input class="av-cell" data-t="'+esc(t.id)+'" data-v="'+esc(v)+'" value="'+esc(row[v]||'')+'"></td>'; });
+    html+='<td></td></tr>';
+  });
+  html+='</tbody></table></div>';
+  if(!vs.length) html+='<div class="av-gridbtns"><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna (ex.: Puccinia)</button></div>';
+  w.innerHTML=html;
+}
+function _avSyncInputs(){
+  var w=document.getElementById('avGridWrap'); if(!w) return;
+  Array.prototype.forEach.call(w.querySelectorAll('.av-cell'), function(inp){
+    var t=inp.getAttribute('data-t'), v=inp.getAttribute('data-v');
+    if(!_avGrid.notas[t]) _avGrid.notas[t]={};
+    _avGrid.notas[t][v]=inp.value;
+  });
+}
+function avAddCol(){
+  _avSyncInputs();
+  var name=prompt('Nome da variável avaliada (ex.: Puccinia, Helmintosporiose, Stand, Altura):');
+  if(name==null) return; name=name.trim(); if(!name) return;
+  if(_avGrid.variaveis.indexOf(name)<0) _avGrid.variaveis.push(name);
+  renderAvGrid();
+}
+function avDelCol(name){
+  _avSyncInputs();
+  _avGrid.variaveis=_avGrid.variaveis.filter(function(v){return v!==name;});
+  Object.keys(_avGrid.notas).forEach(function(t){ if(_avGrid.notas[t]) delete _avGrid.notas[t][name]; });
+  renderAvGrid();
+}
+/* Grade read-only (no detalhe do estudo e no export) */
+function avGridHtml(a){
+  if(!a.variaveis||!a.variaveis.length) return '';
+  var ts=_avTrats(); if(!ts.length) return '';
+  _avCss();
+  var h='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th>';
+  a.variaveis.forEach(function(v){ h+='<th>'+esc(v)+'</th>'; });
+  h+='</tr></thead><tbody>';
+  ts.forEach(function(t){ var row=(a.notas&&a.notas[t.id])||{}; h+='<tr><td class="av-tname">'+esc(t.id)+'</td>';
+    a.variaveis.forEach(function(v){ h+='<td>'+esc(row[v]||'—')+'</td>'; }); h+='</tr>'; });
+  h+='</tbody></table></div>';
+  return h;
+}
+
 function openStudyEditAvaliacao(aid,tipoSugerido){
   editingAvId=aid;editingAplId=null;draftAp=null;
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
@@ -3343,6 +3421,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido){
     av=study.avaliacoes.find(function(a){return a.id===aid});
   }
   if(!av)return;
+  _avGrid={ variaveis:(av.variaveis||[]).slice(), notas:JSON.parse(JSON.stringify(av.notas||{})) };
   var bbchList=getBBCHList(q.cultura);
 
   var h='<div class="se-head"><h3>Avaliação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()">×</button></div>';
@@ -3359,10 +3438,12 @@ function openStudyEditAvaliacao(aid,tipoSugerido){
     });
     h+='</select></div>';
   }
-  h+='<div class="se-field"><label>Observações / Resultados</label><textarea id="vObs" rows="5" placeholder="Dados coletados, notas de campo...">'+esc(av.obs||"")+'</textarea></div>';
+  h+='<div class="se-field"><label>Notas por tratamento</label><div id="avGridWrap"></div></div>';
+  h+='<div class="se-field"><label>Observações / Resultados</label><textarea id="vObs" rows="4" placeholder="Dados coletados, notas de campo...">'+esc(av.obs||"")+'</textarea></div>';
   h+='<div class="se-actions"><button class="btn-save" onclick="saveAvaliacao()">SALVAR</button><button class="btn-cancel" onclick="closeEventEdit()">Cancelar</button></div>';
 
   document.getElementById("eePnl").innerHTML=h;
+  renderAvGrid();
   document.getElementById("eeOvl").classList.add("open");
 }
 
@@ -3378,6 +3459,7 @@ function saveAvaliacao(){
   var bbchEl=document.getElementById("vBBCH");
   av.bbch=bbchEl?bbchEl.value:"";
   av.obs=document.getElementById("vObs").value.trim();
+  _avSyncInputs(); av.variaveis=_avGrid.variaveis.slice(); av.notas=_avGrid.notas;
   if(isNew){
     study.avaliacoes.push(av);
     draftAv=null;
