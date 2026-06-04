@@ -1483,27 +1483,60 @@ function cloudApply(st){
 }
 function cloudApplyPending(){ if(_cloudPending && !window._qEditing){ var p=_cloudPending; _cloudPending=null; cloudApply(p); } }
 var _cloudAllowShrink=false; /* só true em exclusão intencional (local/quadra) */
+/* ===== Merge por entidade: une quadras/estudos/aplicações/avaliações por id, p/ NÃO perder
+   o que outro aparelho adicionou quando dois salvam quase ao mesmo tempo. ===== */
+function _mergeById(la,ca,mergeFn){
+  la=la||[]; ca=ca||[]; var byId={}, order=[];
+  ca.forEach(function(x){ if(x&&x.id){ if(!byId[x.id])order.push(x.id); byId[x.id]=x; } });
+  la.forEach(function(x){ if(!x||!x.id)return; if(byId[x.id]){ byId[x.id]=mergeFn?mergeFn(x,byId[x.id]):x; } else { order.push(x.id); byId[x.id]=x; } });
+  return order.map(function(id){ return byId[id]; });
+}
+function _mergeStudy(ls,cs){
+  var m={},k; for(k in cs)m[k]=cs[k]; for(k in ls)m[k]=ls[k]; /* prefere campos locais; mantém campos só-da-nuvem */
+  m.aplicacoes=_mergeById(ls.aplicacoes,cs.aplicacoes,null);
+  m.avaliacoes=_mergeById(ls.avaliacoes,cs.avaliacoes,null);
+  if(!(ls.tratamentos&&ls.tratamentos.length)&&(cs.tratamentos&&cs.tratamentos.length)) m.tratamentos=cs.tratamentos;
+  return m;
+}
+function cloudMerge(local,cloud){
+  if(!cloud) return local; if(!local) return cloud;
+  function uni(a,b){ var o={},k; if(b)for(k in b)o[k]=b[k]; if(a)for(k in a)o[k]=a[k]; return o; } /* une chaves; mesma chave -> local */
+  var out={};
+  out.qgeo=uni(local.qgeo,cloud.qgeo);
+  out.qlocal=uni(local.qlocal,cloud.qlocal);
+  out.qnome=uni(local.qnome,cloud.qnome);
+  out.locais=uni(local.locais,cloud.locais);
+  out.georef=local.georef||cloud.georef;
+  out.data={};
+  var ids={},k; for(k in (cloud.data||{}))ids[k]=1; for(k in (local.data||{}))ids[k]=1;
+  Object.keys(ids).forEach(function(qid){
+    var lq=(local.data||{})[qid], cq=(cloud.data||{})[qid];
+    if(!lq){ out.data[qid]=cq; return; } if(!cq){ out.data[qid]=lq; return; }
+    var m={},kk; for(kk in cq)m[kk]=cq[kk]; for(kk in lq)m[kk]=lq[kk];
+    m.estudos=_mergeById(lq.estudos,cq.estudos,_mergeStudy);
+    out.data[qid]=m;
+  });
+  return out;
+}
 function cloudSave(){
   if(!cloudInit() || _cloudApplying || !_cloudInitDone) return; /* só escreve depois de ter lido a nuvem */
   cloudBadge('saving');
   var localState=cloudState();
-  var localLoc=Object.keys(localState.locais||{}).length, localQ=Object.keys(localState.qgeo||{}).length;
   var allowShrink=_cloudAllowShrink; _cloudAllowShrink=false;
   try{
-    /* RELÊ a nuvem antes de gravar: nunca sobrescreve um estado mais novo nem ENCOLHE sem ser exclusão */
+    /* RELÊ a nuvem e faz MERGE antes de gravar — assim, se outro aparelho adicionou algo,
+       não se perde. Exclusão intencional (allowShrink) grava como está (a deleção precisa valer). */
     SB.from('app_state').select('state').eq('id',1).single().then(function(res){
       var cs = res && res.data && res.data.state;
       var cRev = (cs && cs.rev!=null) ? cs.rev : 0;
-      var cLoc = (cs && cs.locais) ? Object.keys(cs.locais).length : 0;
-      var cQ = (cs && cs.qgeo) ? Object.keys(cs.qgeo).length : 0;
-      if(_cloudRev!=null && cRev > _cloudRev){ if(cs) cloudApply(cs); cloudBadge('saved'); return; } /* nuvem mais nova */
-      if(!allowShrink && cs && (cLoc>localLoc || cQ>localQ)){ cloudApply(cs); cloudBadge('saved'); return; } /* não encolhe */
-      _cloudRev=(cRev||0)+1; localState.rev=_cloudRev;
-      if(allowShrink) localState._allowShrink=true; /* avisa o banco: este encolhimento é exclusão intencional */
-      SB.from('app_state').update({ state: localState, updated_at:new Date().toISOString() }).eq('id',1)
+      var toSave = (allowShrink || !cs) ? localState : cloudMerge(localState, cs);
+      _cloudRev=(cRev||0)+1; toSave.rev=_cloudRev;
+      if(allowShrink) toSave._allowShrink=true; /* avisa o banco: encolhimento é exclusão intencional */
+      if(!allowShrink && cs){ try{ cloudApply(toSave); }catch(e){} } /* reflete o merge na tela (ganha o que o outro adicionou) */
+      SB.from('app_state').update({ state: toSave, updated_at:new Date().toISOString() }).eq('id',1)
         .then(function(r2){
           if(r2 && r2.error){
-            /* o banco RECUSOU (gravação velha/destrutiva ou conflito) -> não insiste; puxa a versão boa da nuvem */
+            /* o banco RECUSOU (conflito/velha) -> não insiste; puxa a versão boa da nuvem */
             cloudBadge('error','— sincronizando');
             setTimeout(function(){ try{ cloudPull(); }catch(e){} }, 600);
           } else { cloudBadge('saved'); }
