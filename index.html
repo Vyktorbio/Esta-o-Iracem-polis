@@ -2343,10 +2343,11 @@ function buildStudyRecord(qid,s){
   if(s.tratamentos.length){ L.push(''); L.push('TRATAMENTOS'); L.push('#\tProduto\tDose\tV.Calda\tObs');
     s.tratamentos.forEach(function(t){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t'+(t.volume||'')+'\t'+(t.obs||'')); }); }
   if(s.aplicacoes.length){ L.push(''); L.push('APLICACOES'); L.push('Data\tBBCH\tObs');
-    s.aplicacoes.slice().sort(byData).forEach(function(a){ L.push((isoToBR(a.data)||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||'')); }); }
+    s.aplicacoes.slice().sort(byData).forEach(function(a){ L.push((isoToBR(a.data)||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||'')); var ct=_carimboTSV(a.carimbo); if(ct)L.push(ct); }); }
   if(s.avaliacoes.length){ L.push(''); L.push('AVALIACOES'); L.push('Data\tTipo\tBBCH\tObs');
     s.avaliacoes.slice().sort(byData).forEach(function(a){
       L.push((isoToBR(a.data)||'')+'\t'+(a.tipo||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||''));
+      var ct=_carimboTSV(a.carimbo); if(ct)L.push(ct);
       if(a.variaveis&&a.variaveis.length){
         L.push('Trat\t'+a.variaveis.join('\t'));
         s.tratamentos.forEach(function(t){ var row=(a.notas&&a.notas[t.id])||{};
@@ -3257,6 +3258,7 @@ function openStudyDetail(qid,sid){
         h+='<div class="evento-bbch">BBCH '+esc(a.bbch)+(info?' · '+esc(info.fase):'')+'</div>';
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
+      h+=carimboHtml(a.carimbo);
       h+='</div>';
     });
     h+='</div>';
@@ -3282,6 +3284,7 @@ function openStudyDetail(qid,sid){
       }
       if(a.obs)h+='<div class="evento-obs">'+esc(a.obs)+'</div>';
       h+=avGridHtml(a);
+      h+=carimboHtml(a.carimbo);
       h+='</div>';
     });
     h+='</div>';
@@ -3541,6 +3544,100 @@ function openStudyEditAplicacao(aid){
   document.getElementById("eeOvl").classList.add("open");
 }
 
+/* ===================== AUTO-CARIMBO (data/hora + GPS + clima + NDVI no registro) ===================== */
+var APP_VER='matriz', _lastGps=null;
+function _carimboFind(qid,sid,recId,kind){
+  var sts=(data[qid]&&data[qid].estudos)||[];
+  for(var i=0;i<sts.length;i++){ if(sts[i].id===sid){
+    var arr=(kind==='apl')?(sts[i].aplicacoes||[]):(sts[i].avaliacoes||[]);
+    for(var j=0;j<arr.length;j++){ if(arr[j].id===recId) return arr[j]; }
+  } }
+  return null;
+}
+function _carimboSet(qid,sid,recId,kind,field,val){
+  var r=_carimboFind(qid,sid,recId,kind); if(!r) return;
+  if(!r.carimbo) r.carimbo={};
+  r.carimbo[field]=val; try{ save(); }catch(e){}
+  try{ if(curV===qid && curSid===sid && document.getElementById('sdOvl') && document.getElementById('sdOvl').classList.contains('open')) openStudyDetail(qid,sid); }catch(e){}
+}
+function _carimboLoc(cb){
+  if(!navigator.geolocation){ cb(null); return; }
+  navigator.geolocation.getCurrentPosition(function(p){
+    _lastGps={lat:p.coords.latitude,lng:p.coords.longitude,acc:p.coords.accuracy,ts:Date.now()};
+    cb({lat:_lastGps.lat,lng:_lastGps.lng,acc:_lastGps.acc});
+  }, function(){ cb(_lastGps?{lat:_lastGps.lat,lng:_lastGps.lng,acc:_lastGps.acc,cache:true}:null); }, {enableHighAccuracy:true,timeout:6000,maximumAge:120000});
+}
+function _stationMacForQuadra(qid){
+  if(!_climaStations||!_climaStations.length) return null;
+  var loc=(typeof QLOCAL==='object'&&QLOCAL&&QLOCAL[qid])||(typeof HOME_LOCAL!=='undefined'?HOME_LOCAL:null);
+  var nm=_climaNorm((typeof LOCAIS==='object'&&LOCAIS&&loc&&LOCAIS[loc]&&LOCAIS[loc].nome)||''); if(!nm) return null;
+  var i,k;
+  for(i=0;i<_climaStations.length;i++){ var sn=_climaNorm(_climaStations[i].name); if(sn&&(sn.indexOf(nm)>=0||nm.indexOf(sn)>=0)) return _climaStations[i].mac; }
+  var toks=nm.match(/[a-z]{4,}/g)||[];
+  for(i=0;i<_climaStations.length;i++){ var s2=_climaNorm(_climaStations[i].name); for(k=0;k<toks.length;k++){ if(s2.indexOf(toks[k])>=0) return _climaStations[i].mac; } }
+  return null;
+}
+function _carimboClima(qid, cb){
+  var ctr=quadraCenter(qid);
+  function openMeteo(){
+    if(!ctr){ cb(null); return; }
+    var url='https://api.open-meteo.com/v1/forecast?latitude='+ctr[0].toFixed(4)+'&longitude='+ctr[1].toFixed(4)+'&current=temperature_2m,relative_humidity_2m,dew_point_2m,precipitation,surface_pressure,wind_speed_10m,wind_gusts_10m,wind_direction_10m,vapour_pressure_deficit,shortwave_radiation&timezone=America%2FSao_Paulo';
+    fetch(url).then(function(r){return r.json();}).then(function(j){ var c=j&&j.current; if(!c){cb(null);return;}
+      cb({fonte:'openmeteo',hora:c.time,temp:c.temperature_2m,umidade:c.relative_humidity_2m,orvalho:c.dew_point_2m,vpd:c.vapour_pressure_deficit,pressao:c.surface_pressure,vento:c.wind_speed_10m,rajada:c.wind_gusts_10m,vento_dir:c.wind_direction_10m,chuva:c.precipitation,solar:c.shortwave_radiation}); }).catch(function(){ cb(null); });
+  }
+  function station(){
+    var mac=_stationMacForQuadra(qid); if(!mac){ openMeteo(); return; }
+    fetch(NDVI_PROXY+'/clima?mac='+encodeURIComponent(mac)).then(function(r){return r.json();}).then(function(d){
+      if(!d||d.error){ openMeteo(); return; }
+      function v(n){ return (n&&n.value!=null)?n.value:null; }
+      cb({fonte:'estacao',mac:mac,hora:d.time,temp:v(d.temp),umidade:v(d.humidity),orvalho:v(d.dew_point),vpd:v(d.vpd),pressao:v(d.pressure),vento:v(d.wind_speed),rajada:v(d.wind_gust),vento_dir:v(d.wind_dir),chuva:v(d.rain_day),solar:v(d.solar)});
+    }).catch(function(){ openMeteo(); });
+  }
+  if(_climaStations){ station(); }
+  else { fetch(NDVI_PROXY+'/clima/estacoes').then(function(r){return r.json();}).then(function(arr){ if(Array.isArray(arr))_climaStations=arr; station(); }).catch(openMeteo); }
+}
+function _carimboNdvi(qid, cb){
+  var ctr=quadraCenter(qid); if(!ctr){ cb(null); return; }
+  fetch(NDVI_PROXY+'/point?lat='+ctr[0].toFixed(6)+'&lng='+ctr[1].toFixed(6)+'&date='+todayISO()).then(function(r){return r.json();}).then(function(d){
+    if(!d||d.error){ cb(null); return; }
+    cb({fonte:'sentinel2',ndvi:d.ndvi,ndre:d.ndre,gndvi:d.gndvi,data:d.date});
+  }).catch(function(){ cb(null); });
+}
+function carimbar(qid,sid,recId,kind){
+  var rec=_carimboFind(qid,sid,recId,kind); if(!rec) return;
+  var now=new Date();
+  rec.carimbo={ ts:now.getTime(), data:now.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}), centro:quadraCenter(qid), app:APP_VER, gps:null, clima:null, ndvi:null };
+  try{ save(); }catch(e){}
+  _carimboLoc(function(loc){ if(loc) _carimboSet(qid,sid,recId,kind,'gps',loc); });
+  _carimboClima(qid,function(cl){ if(cl) _carimboSet(qid,sid,recId,kind,'clima',cl); });
+  _carimboNdvi(qid,function(nd){ if(nd) _carimboSet(qid,sid,recId,kind,'ndvi',nd); });
+}
+function _carimboTSV(c){
+  if(!c) return '';
+  var p=[]; if(c.data)p.push('Registrado '+c.data);
+  if(c.clima){ var cl=c.clima; p.push('Clima('+(cl.fonte==='estacao'?'estacao':'previsao')+') '+(cl.temp!=null?cl.temp+'C':'')+(cl.umidade!=null?' '+cl.umidade+'%UR':'')+(cl.vpd!=null?' VPD'+cl.vpd:'')+(cl.vento!=null?' vento'+cl.vento+'km/h':'')+(cl.chuva!=null?' chuva'+cl.chuva+'mm':'')); }
+  if(c.ndvi&&c.ndvi.ndvi!=null) p.push('NDVI '+c.ndvi.ndvi+(c.ndvi.ndre!=null?' NDRE '+c.ndvi.ndre:'')+(c.ndvi.data?' ('+c.ndvi.data+')':''));
+  var ll=c.gps?(c.gps.lat+','+c.gps.lng):(c.centro&&c.centro.length===2?(c.centro[0]+','+c.centro[1]):'');
+  if(ll) p.push('GPS '+ll);
+  return p.length?('  carimbo\t'+p.join(' | ')):'';
+}
+function carimboHtml(c){
+  if(!c) return '';
+  var p=[];
+  if(c.data) p.push('📅 '+esc(c.data));
+  if(c.clima){ var cl=c.clima, s='🌡️ '+(cl.temp!=null?(Math.round(cl.temp*10)/10)+'°C':'—');
+    if(cl.umidade!=null)s+=' · 💧'+Math.round(cl.umidade)+'%';
+    if(cl.vpd!=null)s+=' · VPD '+(Math.round(cl.vpd*100)/100);
+    if(cl.vento!=null)s+=' · 🌬️'+(Math.round(cl.vento*10)/10)+'km/h';
+    if(cl.chuva!=null)s+=' · 🌧️'+(Math.round(cl.chuva*10)/10)+'mm';
+    p.push(s+' ('+(cl.fonte==='estacao'?'estação':'previsão')+')'); }
+  if(c.ndvi&&c.ndvi.ndvi!=null) p.push('🛰️ NDVI '+(Math.round(c.ndvi.ndvi*100)/100)+(c.ndvi.ndre!=null?' · NDRE '+(Math.round(c.ndvi.ndre*100)/100):'')+(c.ndvi.data?' ('+esc(c.ndvi.data)+')':''));
+  if(c.gps) p.push('📍 '+c.gps.lat.toFixed(5)+', '+c.gps.lng.toFixed(5)+(c.gps.acc?' ±'+Math.round(c.gps.acc)+'m':''));
+  else if(c.centro&&c.centro.length===2) p.push('📍 '+c.centro[0].toFixed(5)+', '+c.centro[1].toFixed(5)+' (centro)');
+  if(!p.length) return '';
+  return '<div style="font-size:10px;color:#8aa88a;margin-top:5px;line-height:1.6;border-top:1px dashed #2a3a2a;padding-top:5px">'+p.join(' · ')+'</div>';
+}
+
 function saveAplicacao(){
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
   if(!study)return;
@@ -3556,6 +3653,7 @@ function saveAplicacao(){
     study.aplicacoes.push(ap);
     draftAp=null;
   }
+  if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl');
   save();
   closeEventEdit();
   openStudyDetail(curV,curSid);
@@ -3738,6 +3836,7 @@ function saveAvaliacao(){
     study.avaliacoes.push(av);
     draftAv=null;
   }
+  if(!av.carimbo) carimbar(curV,curSid,av.id,'aval');
   save();
   closeEventEdit();
   openStudyDetail(curV,curSid);
