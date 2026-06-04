@@ -1951,6 +1951,41 @@ function climaLoad(){
 }
 function _cval(n,dec){ if(!n||n.value==null||n.value==='') return '—'; var v=n.value; if(typeof v==='number'&&dec!=null) v=v.toFixed(dec); return v; }
 function _compass(deg){ if(deg==null) return ''; return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'][Math.round(deg/22.5)%16]; }
+/* Nascer/pôr do sol + horas de luz — cálculo OFFLINE (equação do nascer do sol, NOAA).
+   date local; lat/lng em graus. Retorna {sunrise:Date, sunset:Date, dayMs} (UTC) ou {polar}. */
+function sunriseSunset(date, lat, lng){
+  var rad=Math.PI/180;
+  var Jdate=Date.UTC(date.getFullYear(),date.getMonth(),date.getDate())/86400000 + 2440587.5;
+  var n=Math.ceil(Jdate - 2451545.0 + 0.0008);
+  var Jstar=n - (lng/360.0);
+  var M=(357.5291 + 0.98560028*Jstar) % 360, Mr=M*rad;
+  var C=1.9148*Math.sin(Mr) + 0.0200*Math.sin(2*Mr) + 0.0003*Math.sin(3*Mr);
+  var lambda=(M + C + 282.9372) % 360, lr=lambda*rad;
+  var Jtransit=2451545.0 + Jstar + 0.0053*Math.sin(Mr) - 0.0069*Math.sin(2*lr);
+  var delta=Math.asin(Math.sin(lr)*Math.sin(23.4397*rad));
+  var cosH=(Math.sin(-0.833*rad) - Math.sin(lat*rad)*Math.sin(delta)) / (Math.cos(lat*rad)*Math.cos(delta));
+  if(cosH>=1) return {polar:'night'};
+  if(cosH<=-1) return {polar:'day'};
+  var H=Math.acos(cosH)/rad;
+  function jd2date(jd){ return new Date((jd - 2440587.5)*86400000); }
+  var sr=jd2date(Jtransit - H/360.0), ss=jd2date(Jtransit + H/360.0);
+  return { sunrise:sr, sunset:ss, dayMs:(ss-sr) };
+}
+/* Coordenada p/ o sol da estação selecionada: prefere o CENTRO do Local georreferenciado
+   que casa com a estação (confiável); senão a coord cadastrada da estação. */
+function _climaSunLL(){
+  var st=(_climaStations||[]).filter(function(s){return s.mac===climaMac;})[0]; if(!st) return null;
+  if(typeof LOCAIS==='object' && LOCAIS){
+    var sn=_climaNorm(st.name||''), ids=Object.keys(LOCAIS), i, k;
+    for(i=0;i<ids.length;i++){ var c=LOCAIS[ids[i]].centro, ln=_climaNorm(LOCAIS[ids[i]].nome||'');
+      if(c&&c.length===2&&ln&&(sn.indexOf(ln)>=0||ln.indexOf(sn)>=0)) return c; }
+    var toks=sn.match(/[a-z]{4,}/g)||[];
+    for(i=0;i<ids.length;i++){ var c2=LOCAIS[ids[i]].centro, ln2=_climaNorm(LOCAIS[ids[i]].nome||'');
+      if(c2&&c2.length===2){ for(k=0;k<toks.length;k++){ if(ln2.indexOf(toks[k])>=0) return c2; } } }
+  }
+  if(st.lat!=null&&st.lng!=null) return [st.lat, st.lng];
+  return null;
+}
 function climaRender(d){
   var b=document.getElementById('climaBody'); if(!b) return;
   function card(lab,val,unit){ return '<div class="clima-card"><div class="lab">'+lab+'</div><div class="val">'+val+(unit?' <small>'+unit+'</small>':'')+'</div></div>'; }
@@ -1968,6 +2003,18 @@ function climaRender(d){
   h+=card('☀️ Radiação', _cval(d.solar,0),'W/m²');
   h+='</div>';
   h+='<div class="clima-grid" style="margin-top:0">'+card('Chuva semana', _cval(d.rain_week,1),'mm')+card('Chuva mês', _cval(d.rain_month,1),'mm')+'</div>';
+  /* Sol: nascer/pôr + horas de luz (offline, do Local/estação) */
+  var ll=_climaSunLL();
+  if(ll){
+    var su=sunriseSunset(new Date(), ll[0], ll[1]);
+    if(su && !su.polar){
+      var tz={timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'};
+      var sr=su.sunrise.toLocaleTimeString('pt-BR',tz), ss=su.sunset.toLocaleTimeString('pt-BR',tz);
+      var hh=Math.floor(su.dayMs/3600000), mm=Math.round((su.dayMs%3600000)/60000); if(mm===60){hh++;mm=0;}
+      h+='<div class="clima-grid" style="margin-top:0">'+card('🌅 Nascer do sol', sr,'')+card('🌇 Pôr do sol', ss,'')+
+         '<div class="clima-card" style="grid-column:1/3"><div class="lab">☀️ Horas de luz</div><div class="val">'+hh+'h'+(mm?(' '+mm+'min'):'')+'</div></div></div>';
+    }
+  }
   var ts=d.time?new Date(d.time*1000):null;
   h+='<div class="clima-foot">'+(ts?('atualizado '+ts.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})):'')+' · auto 5 min 🔄</div>';
   b.innerHTML=h;
