@@ -2142,6 +2142,82 @@ function quadraDims(id){
   return { comprimento:Math.max(best.a,best.b), largura:Math.min(best.a,best.b) };
 }
 
+/* ===================== EXPORTAR ESTUDO p/ planilha + NDVI do período ===================== */
+var _stxText='';
+function _isoShift(iso,days){ var d=new Date(iso+'T00:00:00'); if(isNaN(d)) return iso; d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+function _stxCopyFallback(text){ try{ var ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.focus(); ta.select(); var ok=document.execCommand('copy'); document.body.removeChild(ta); return ok; }catch(e){ return false; } }
+function _stxCopy(text){ try{ if(navigator.clipboard&&navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function(){return true;},function(){return _stxCopyFallback(text);}); }catch(e){} return Promise.resolve(_stxCopyFallback(text)); }
+function _stxToast(msg){ var t=document.getElementById('stxToast'); if(!t){ t=document.createElement('div'); t.id='stxToast'; t.style.cssText='position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:3000;background:#1f5a2a;color:#eafaea;padding:9px 16px;border-radius:999px;font:600 13px system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.4);transition:opacity .3s;pointer-events:none'; document.body.appendChild(t);} t.textContent=msg; t.style.opacity='1'; clearTimeout(window._stxTt); window._stxTt=setTimeout(function(){t.style.opacity='0';},1900); }
+function buildStudyRecord(qid,s){
+  var q=data[qid]||{};
+  var locNome=(LOCAIS&&QLOCAL&&LOCAIS[QLOCAL[qid]]&&LOCAIS[QLOCAL[qid]].nome)||(LOCAIS&&LOCAIS[HOME_LOCAL]&&LOCAIS[HOME_LOCAL].nome)||'';
+  var aHa=quadraAreaHa(qid), dim=quadraDims(qid), ctr=quadraCenter(qid);
+  var L=[]; function add(k,v){ L.push(k+'\t'+(v==null?'':String(v))); }
+  add('Local',locNome); add('Quadra',quadraNome(qid));
+  add('Cultura',q.cultura||''); add('Cultivar',q.cultivar||'');
+  add('Estudo (codigo)',s.codigo||''); if(s.descricao) add('Descricao',s.descricao);
+  add('Inicio',isoToBR(s.dataInicio)||''); add('No aplicacoes',s.numAplicacoes);
+  add('Intervalo (dias)',s.intervaloDias); add('Repeticoes',s.numRepeticoes);
+  add('Tratamentos',s.tratamentos.length); add('Parcelas (trat x rep)', s.tratamentos.length*s.numRepeticoes);
+  add('Area (ha)', aHa!=null?aHa.toFixed(2):''); if(dim) add('Dimensoes C x L (m)', Math.round(dim.comprimento)+' x '+Math.round(dim.largura));
+  if(ctr) add('Coordenadas (lat, lng)', ctr[0].toFixed(6)+', '+ctr[1].toFixed(6));
+  function byData(a,b){ return (a.data||'').localeCompare(b.data||''); }
+  if(s.tratamentos.length){ L.push(''); L.push('TRATAMENTOS'); L.push('#\tProduto\tDose\tV.Calda\tObs');
+    s.tratamentos.forEach(function(t){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t'+(t.volume||'')+'\t'+(t.obs||'')); }); }
+  if(s.aplicacoes.length){ L.push(''); L.push('APLICACOES'); L.push('Data\tBBCH\tObs');
+    s.aplicacoes.slice().sort(byData).forEach(function(a){ L.push((isoToBR(a.data)||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||'')); }); }
+  if(s.avaliacoes.length){ L.push(''); L.push('AVALIACOES'); L.push('Data\tTipo\tBBCH\tObs');
+    s.avaliacoes.slice().sort(byData).forEach(function(a){ L.push((isoToBR(a.data)||'')+'\t'+(a.tipo||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||'')); }); }
+  var ds=[]; if(s.dataInicio)ds.push(s.dataInicio);
+  (s.aplicacoes||[]).forEach(function(a){ if(a.data)ds.push(a.data); });
+  (s.avaliacoes||[]).forEach(function(a){ if(a.data)ds.push(a.data); });
+  ds=ds.filter(Boolean).sort();
+  var today=todayISO(), from, to;
+  if(ds.length){ from=ds[0]; to=_isoShift(ds[ds.length-1],15); if(to>today)to=today; if(from>=to)from=_isoShift(to,-45); }
+  else { from=_isoShift(today,-180); to=today; }
+  return { text:L.join('\n'), from:from, to:to };
+}
+function studyFetchNdvi(qid,from,to,cb){
+  ensureQGEO(); var pts=QGEO&&QGEO[qid]; if(!pts){ cb(null,'sem geometria'); return; }
+  var ring=pts.map(function(p){return [p[1],p[0]];}); ring.push(ring[0]);
+  var geom={type:'Polygon',coordinates:[ring]};
+  fetch(NDVI_PROXY+'/stats?index=NDVI&from='+from+'&to='+to+'&geom='+encodeURIComponent(JSON.stringify(geom)))
+   .then(function(r){return r.json();}).then(function(arr){ if(arr&&arr.error){cb(null,arr.error);return;} cb(arr||[]); })
+   .catch(function(){ cb(null,'Servidor NDVI fora do ar (pode estar acordando ~50s).'); });
+}
+function studyExport(qid,sid){
+  var q=data[qid]||{}; var s=(q.estudos||[]).find(function(x){return x.id===sid;}); if(!s) return;
+  s=normalizeStudy(s);
+  var rec=buildStudyRecord(qid,s); _stxText=rec.text;
+  _stxCopy(rec.text).then(function(ok){ _stxToast(ok?'✓ Registro copiado p/ planilha':'Selecione no quadro e copie'); });
+  showStudyExportModal(qid,s,rec.from,rec.to);
+  var nb=document.getElementById('stxNdvi'); if(nb) nb.innerHTML='<div class="ndvi-status">Buscando NDVI do período ('+esc(isoToBR(rec.from))+' → '+esc(isoToBR(rec.to))+')…</div>';
+  studyFetchNdvi(qid,rec.from,rec.to,function(arr,err){
+    var b=document.getElementById('stxNdvi'); if(!b) return;
+    if(err||!arr||!arr.length){ b.innerHTML='<div class="ndvi-status" style="color:#d9b">NDVI: '+(err?esc(err):'sem dados no período (muita nuvem?)')+'</div>'; return; }
+    var lines=['','NDVI DO PERIODO (inicio -> fim)','Data\tNDVI medio'];
+    arr.forEach(function(d){ lines.push(d.date+'\t'+d.mean.toFixed(3)); });
+    var f=arr[0], l=arr[arr.length-1], dv=l.mean-f.mean;
+    lines.push('Variacao\t'+(dv>=0?'+':'')+dv.toFixed(3)+' ('+f.mean.toFixed(2)+' -> '+l.mean.toFixed(2)+')');
+    _stxText=rec.text+'\n'+lines.join('\n');
+    var ta=document.getElementById('stxText'); if(ta) ta.value=_stxText;
+    b.innerHTML=serieSvg(arr)+'<div class="ndvi-status">NDVI '+f.mean.toFixed(2)+' → '+l.mean.toFixed(2)+' ('+(dv>=0?'+':'')+dv.toFixed(2)+') · '+arr.length+' datas no período</div>';
+  });
+}
+function showStudyExportModal(qid,s,from,to){
+  var m=document.getElementById('stxModal');
+  if(!m){ m=document.createElement('div'); m.id='stxModal'; m.className='ndvi-modal'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
+  var title=esc((s.codigo||'(sem codigo)')+' — '+quadraNome(qid));
+  m.innerHTML='<div class="ndvi-modal-box" style="max-width:560px">'+
+    '<div class="ndvi-modal-top"><b>📄 '+title+'</b><button onclick="document.getElementById(\'stxModal\').style.display=\'none\'">✕</button></div>'+
+    '<div class="ndvi-status">Registro já copiado. Cole na planilha — os campos vêm separados por TAB (cada valor numa coluna).</div>'+
+    '<textarea id="stxText" readonly style="width:100%;height:148px;box-sizing:border-box;background:#0a110a;color:#cfe0cf;border:1px solid #2a3a2a;border-radius:8px;font:11px/1.45 ui-monospace,Menlo,monospace;padding:8px;white-space:pre;overflow:auto">'+esc(_stxText)+'</textarea>'+
+    '<div id="stxNdvi" style="margin-top:8px"></div>'+
+    '<div class="gr-btns" style="margin-top:10px"><button class="ndvi-ix" style="flex:1" onclick="_stxCopy(document.getElementById(\'stxText\').value).then(function(ok){_stxToast(ok?\'✓ Copiado (registro + NDVI)\':\'Selecione e copie\');})">📋 Copiar tudo</button><button class="gr-cancel" onclick="document.getElementById(\'stxModal\').style.display=\'none\'">Fechar</button></div>'+
+  '</div>';
+  m.style.display='flex';
+}
+
 function showD(id){
   curV=id;
   var d=data[id]||{},dap=cDAP(d.plantio),st=gS(d.cultura,dap),ac=gC(d.cultura),pd=pD(d.plantio);
@@ -2236,7 +2312,7 @@ function renderStudyCard(qid,study){
 
   var html='<div class="study-card '+cls+'">';
   html+='<div class="study-top"><div class="study-name">'+esc(study.nome||'(sem nome)')+'</div>';
-  html+='<div class="study-actions"><button class="study-btn" onclick="openStudyEdit(\''+qid+'\',\''+study.id+'\')" title="Editar">✎</button><button class="study-btn del" onclick="deleteStudy(\''+qid+'\',\''+study.id+'\')" title="Excluir">×</button></div></div>';
+  html+='<div class="study-actions"><button class="study-btn" onclick="studyExport(\''+qid+'\',\''+study.id+'\')" title="Copiar dados do ensaio + NDVI do período p/ planilha">📄</button><button class="study-btn" onclick="openStudyEdit(\''+qid+'\',\''+study.id+'\')" title="Editar">✎</button><button class="study-btn del" onclick="deleteStudy(\''+qid+'\',\''+study.id+'\')" title="Excluir">×</button></div></div>';
   html+='<div class="study-meta"><b>Início:</b> '+(study.dataInicio?fD(pD(isoToBR(study.dataInicio))):'—')+' • <b>'+nApl+'</b> aplicação(ões) • '+intInfo+' • <b>'+nAval+'</b> avaliação(ões)</div>';
   html+=nextHtml;
   html+=tlHtml;
@@ -2916,6 +2992,7 @@ function openStudyDetail(qid,sid){
   h+='<button class="sd-back" onclick="backToQuadra()">‹ '+esc(qid)+'</button>';
   h+='<div class="sd-codigo">'+esc(study.codigo||"(sem código)")+'</div>';
   h+='<div class="sd-actions">';
+  h+='<button class="btn-sm" onclick="studyExport(\''+qid+'\',\''+sid+'\')" title="Copiar dados do ensaio + NDVI do período p/ planilha">📄 Copiar</button>';
   h+='<button class="btn-sm" onclick="openStudyEditV2(\''+qid+'\',\''+sid+'\')">EDITAR</button>';
   h+='</div>';
   h+='</div>';
@@ -3385,6 +3462,7 @@ renderStudyCard=function(qid,study){
   }
   var code=study.codigo||study.nome||'(sem código)';
   var h='<div class="study-card-v2" onclick="openStudyDetail(\''+qid+'\',\''+study.id+'\')">';
+  h+='<button onclick="event.stopPropagation();studyExport(\''+qid+'\',\''+study.id+'\')" title="Copiar dados + NDVI p/ planilha" style="float:right;background:rgba(127,170,127,.14);border:1px solid #2a3a2a;color:#9ac49a;border-radius:7px;padding:3px 9px;font-size:14px;cursor:pointer;margin:-2px -2px 0 6px">📄</button>';
   h+='<div class="study-card-v2-codigo">'+esc(code)+'</div>';
   if(study.descricao)h+='<div class="study-card-v2-desc">'+esc(study.descricao.slice(0,100))+(study.descricao.length>100?'…':'')+'</div>';
   h+='<div class="study-card-v2-meta">';
