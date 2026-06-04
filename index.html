@@ -2890,7 +2890,10 @@ function newStudy(){
     tratamentos:[],
     numRepeticoes:4,
     aplicacoes:[],
-    avaliacoes:[]
+    avaliacoes:[],
+    avalInicio:"",
+    avalIntervalo:7,
+    avalNum:0
   };
 }
 
@@ -2915,6 +2918,9 @@ function normalizeStudy(s){
   if(typeof s.numAplicacoes!=="number")s.numAplicacoes=parseInt(s.numAplicacoes)||1;
   if(!Array.isArray(s.tratamentos))s.tratamentos=[];
   if(typeof s.numRepeticoes!=="number")s.numRepeticoes=parseInt(s.numRepeticoes)||4;
+  if(typeof s.avalInicio!=="string")s.avalInicio="";
+  if(typeof s.avalIntervalo!=="number")s.avalIntervalo=parseInt(s.avalIntervalo)||7;
+  if(typeof s.avalNum!=="number")s.avalNum=parseInt(s.avalNum)||0;
   if(!Array.isArray(s.aplicacoes))s.aplicacoes=[];
   /* Converte avaliacoes antigas (array de strings ISO) para novo formato */
   if(Array.isArray(s.avaliacoes)){
@@ -2926,6 +2932,7 @@ function normalizeStudy(s){
       if(!a.obs)a.obs="";
       if(!Array.isArray(a.variaveis))a.variaveis=[];
       if(!a.notas||typeof a.notas!=="object")a.notas={};
+      if(!a.tipos||typeof a.tipos!=="object")a.tipos={};
       return a;
     });
   }else s.avaliacoes=[];
@@ -3087,6 +3094,7 @@ function openStudyDetail(qid,sid){
     sortAvs.forEach(function(a,i){
       h+='<div class="evento-item">';
       h+='<div class="evento-head"><span class="evento-tipo eval">AV '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+'</span>';
+      h+='<button class="evento-del" style="color:#9ac49a" onclick="openStudyEditAvaliacao(\''+a.id+'\')" title="Editar / lançar notas">✎</button>';
       h+='<button class="evento-del" onclick="removeAvaliacaoV2(\''+a.id+'\')">×</button></div>';
       if(a.tipo)h+='<div class="evento-subtipo">'+esc(a.tipo)+'</div>';
       if(a.bbch){
@@ -3202,6 +3210,14 @@ function renderStudyEditModal(){
   h+='<div class="se-field"><label>Intervalo (dias)</label><input type="number" id="seIntervalo" value="'+s.intervaloDias+'" min="0" max="90"></div>';
   h+='</div>';
 
+  h+='<div class="se-section-title">Avaliações (programação)</div>';
+  h+='<div class="se-row">';
+  h+='<div class="se-field"><label>1ª avaliação</label><input type="date" id="seAvalInicio" value="'+esc(s.avalInicio||'')+'"></div>';
+  h+='<div class="se-field"><label>A cada (dias)</label><input type="number" id="seAvalInt" value="'+(s.avalIntervalo||7)+'" min="1" max="120"></div>';
+  h+='<div class="se-field"><label>Nº avaliações</label><input type="number" id="seAvalNum" value="'+(s.avalNum||0)+'" min="0" max="40"></div>';
+  h+='</div>';
+  h+='<div style="font-size:11px;color:#9a8;margin:-2px 0 8px">Ex.: de 7 em 7, 6 avaliações → o app cria as datas (aparecem na agenda e no estudo). Nº = 0 não gera. Cada data fica editável depois. Se em branco, usa a data da 1ª aplicação.</div>';
+
   h+='<div class="se-section-title">Tratamentos</div>';
   h+='<div class="se-field"><label>Repetições por tratamento</label><input type="number" id="seReps" value="'+s.numRepeticoes+'" min="1" max="10" style="width:80px"></div>';
 
@@ -3255,6 +3271,27 @@ function syncTratInputs(){
   });
 }
 
+/* Gera datas de avaliação a partir do protocolo (1ª data + a cada X dias + N vezes).
+   Aditivo por data; reprograma só os placeholders auto AINDA vazios (não apaga avaliação com dados). */
+function gerarAvaliacoesAuto(s){
+  if(!s) return 0;
+  var start=s.avalInicio||s.dataInicio, iv=parseInt(s.avalIntervalo)||0, n=parseInt(s.avalNum)||0;
+  if(!start||n<=0) return 0;
+  if(!Array.isArray(s.avaliacoes)) s.avaliacoes=[];
+  s.avaliacoes=s.avaliacoes.filter(function(a){
+    var vazio=(!a.variaveis||!a.variaveis.length)&&!a.obs&&!a.tipo&&!a.bbch;
+    return !(a.auto && vazio);
+  });
+  var temData={}; s.avaliacoes.forEach(function(a){ if(a.data) temData[a.data]=true; });
+  var add=0;
+  for(var i=0;i<n;i++){
+    var d=(iv>0)?_isoShift(start,i*iv):start;
+    if(temData[d]) continue;
+    s.avaliacoes.push({id:uid(),data:d,tipo:'',bbch:'',obs:'',variaveis:[],tipos:{},notas:{},auto:true});
+    temData[d]=true; add++;
+  }
+  return add;
+}
 function saveStudyV2(){
   syncTratInputs();
   var s=workingStudy;
@@ -3264,8 +3301,13 @@ function saveStudyV2(){
   s.numAplicacoes=parseInt(document.getElementById("seNumAp").value)||1;
   s.intervaloDias=parseInt(document.getElementById("seIntervalo").value)||0;
   s.numRepeticoes=parseInt(document.getElementById("seReps").value)||4;
+  var ai=document.getElementById("seAvalInicio"); s.avalInicio=ai?ai.value:"";
+  var aiv=document.getElementById("seAvalInt"); s.avalIntervalo=aiv?(parseInt(aiv.value)||0):7;
+  var an=document.getElementById("seAvalNum"); s.avalNum=an?(parseInt(an.value)||0):0;
 
   if(!s.codigo){alert("O código do estudo é obrigatório.");return;}
+
+  gerarAvaliacoesAuto(s);
 
   var q=data[curV];
   if(!q.estudos)q.estudos=[];
@@ -3341,7 +3383,7 @@ function saveAplicacao(){
 }
 
 /* ===== Grade de avaliação: tratamentos (linhas) × variáveis avaliadas (colunas dinâmicas) ===== */
-var _avGrid={variaveis:[],notas:{}};
+var _avGrid={variaveis:[],notas:{},tipos:{}};
 function _avCss(){ if(document.getElementById('avCss'))return; var s=document.createElement('style'); s.id='avCss';
   s.textContent='.av-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:4px;padding-bottom:4px}'+
   '.av-table{border-collapse:collapse;font-size:12px}'+
@@ -3352,6 +3394,7 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   '.av-step{flex:none;width:30px;height:32px;border:1px solid var(--border,#2a3a2a);background:rgba(127,170,127,.14);color:#9ac49a;border-radius:7px;font-size:18px;font-weight:700;line-height:1;cursor:pointer;-webkit-user-select:none;user-select:none;touch-action:manipulation}'+
   '.av-step:active{background:rgba(127,170,127,.3)}'+
   '.av-cell{width:48px;box-sizing:border-box;background:var(--surface,#0a110a);border:1px solid var(--border,#2a3a2a);color:var(--text,#eaf3ed);border-radius:6px;padding:5px 3px;font-size:13px;text-align:center}'+
+  '.av-cell-num{width:60px}'+
   '.av-addcol{background:rgba(127,170,127,.15);border:1px solid #2a3a2a;color:#9ac49a;border-radius:7px;padding:4px 9px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}'+
   '.av-delcol{background:none;border:none;color:#a77;cursor:pointer;font-size:13px;margin-left:5px;padding:0}.av-delcol:hover{color:#ff8a80}'+
   '.av-hint{font-size:11px;color:#9a8;font-style:italic;margin:4px 0}.av-gridbtns{margin-top:6px}';
@@ -3364,12 +3407,19 @@ function renderAvGrid(){
   if(!ts.length){ w.innerHTML='<div class="av-hint">Cadastre os tratamentos do estudo (botão EDITAR) para lançar notas por tratamento.</div>'; return; }
   var vs=_avGrid.variaveis;
   var html='<div class="av-scroll"><table class="av-table"><thead><tr><th>Trat.</th>';
-  vs.forEach(function(v){ html+='<th>'+esc(v)+'<button type="button" class="av-delcol" title="Remover coluna" onclick="avDelCol(\''+esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')">×</button></th>'; });
+  vs.forEach(function(v){ var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct'; html+='<th>'+esc(v)+(tp==='pct'?' <small style="opacity:.6">%</small>':'')+'<button type="button" class="av-delcol" title="Remover coluna" onclick="avDelCol(\''+esc(v).replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')">×</button></th>'; });
   html+='<th><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna</button></th></tr></thead><tbody>';
   ts.forEach(function(t){
     var row=_avGrid.notas[t.id]||{};
     html+='<tr><td class="av-tname" title="'+esc(t.produto||'')+'">'+esc(t.id)+'</td>';
-    vs.forEach(function(v){ html+='<td><div class="av-cellwrap"><button type="button" class="av-step" onclick="avBump(this,-1)">−</button><input class="av-cell" data-t="'+esc(t.id)+'" data-v="'+esc(v)+'" value="'+esc(row[v]||'')+'" inputmode="decimal"><button type="button" class="av-step" onclick="avBump(this,1)">+</button></div></td>'; });
+    vs.forEach(function(v){
+      var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+      if(tp==='contagem'){
+        html+='<td><div class="av-cellwrap"><button type="button" class="av-step" onclick="avBump(this,-1)">−</button><input class="av-cell" data-t="'+esc(t.id)+'" data-v="'+esc(v)+'" value="'+esc(row[v]||'')+'" inputmode="numeric"><button type="button" class="av-step" onclick="avBump(this,1)">+</button></div></td>';
+      } else {
+        html+='<td><input class="av-cell av-cell-num" data-t="'+esc(t.id)+'" data-v="'+esc(v)+'" value="'+esc(row[v]||'')+'" inputmode="decimal" placeholder="%"></td>';
+      }
+    });
     html+='<td></td></tr>';
   });
   html+='</tbody></table></div>';
@@ -3391,14 +3441,17 @@ function avBump(el,delta){
 }
 function avAddCol(){
   _avSyncInputs();
-  var name=prompt('Nome da variável avaliada (ex.: Puccinia, Helmintosporiose, Stand, Altura):');
+  var name=prompt('Nome da variável avaliada (ex.: Fitoplasma, Severidade, Stand, Altura):');
   if(name==null) return; name=name.trim(); if(!name) return;
+  var isCount=confirm('Como você vai lançar "'+name+'"?\n\n  OK  =  CONTAGEM / incidência  (botões − e +)\n  Cancelar  =  NÚMERO / PORCENTAGEM  (digita, ex.: severidade %)');
   if(_avGrid.variaveis.indexOf(name)<0) _avGrid.variaveis.push(name);
+  _avGrid.tipos[name]= isCount ? 'contagem' : 'pct';
   renderAvGrid();
 }
 function avDelCol(name){
   _avSyncInputs();
   _avGrid.variaveis=_avGrid.variaveis.filter(function(v){return v!==name;});
+  if(_avGrid.tipos) delete _avGrid.tipos[name];
   Object.keys(_avGrid.notas).forEach(function(t){ if(_avGrid.notas[t]) delete _avGrid.notas[t][name]; });
   renderAvGrid();
 }
@@ -3429,7 +3482,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido){
     av=study.avaliacoes.find(function(a){return a.id===aid});
   }
   if(!av)return;
-  _avGrid={ variaveis:(av.variaveis||[]).slice(), notas:JSON.parse(JSON.stringify(av.notas||{})) };
+  _avGrid={ variaveis:(av.variaveis||[]).slice(), notas:JSON.parse(JSON.stringify(av.notas||{})), tipos:JSON.parse(JSON.stringify(av.tipos||{})) };
   var bbchList=getBBCHList(q.cultura);
 
   var h='<div class="se-head"><h3>Avaliação'+(aid==="__new__"?' (nova)':'')+'</h3><button class="se-x" onclick="closeEventEdit()">×</button></div>';
@@ -3467,7 +3520,7 @@ function saveAvaliacao(){
   var bbchEl=document.getElementById("vBBCH");
   av.bbch=bbchEl?bbchEl.value:"";
   av.obs=document.getElementById("vObs").value.trim();
-  _avSyncInputs(); av.variaveis=_avGrid.variaveis.slice(); av.notas=_avGrid.notas;
+  _avSyncInputs(); av.variaveis=_avGrid.variaveis.slice(); av.notas=_avGrid.notas; av.tipos=_avGrid.tipos;
   if(isNew){
     study.avaliacoes.push(av);
     draftAv=null;
