@@ -1211,6 +1211,7 @@ function excluirLocal(id){
   var typed=prompt('⚠️ EXCLUIR o local "'+nome+'"'+(qs.length?(' e suas '+qs.length+' quadra(s)'):'')+'.\nEsta ação NÃO pode ser desfeita.\n\nPara confirmar, digite o nome do local:');
   if(typed===null) return;
   if(String(typed).trim().toLowerCase()!==String(nome).trim().toLowerCase()){ alert('O nome não confere. Exclusão cancelada.'); return; }
+  safetyBackup('antes de excluir local '+nome);
   qs.forEach(function(q){ delete QGEO[q]; if(data[q]) delete data[q]; delete QLOCAL[q]; if(QNOME) delete QNOME[q]; });
   delete LOCAIS[id];
   var resto=Object.keys(LOCAIS);
@@ -1328,6 +1329,7 @@ function toggleMainMenu(){
     '<div class="mm-sep"></div>'+
     '<button onclick="closeMainMenu();exportData()">💾 Backup</button>'+
     '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">📥 Importar</button>'+
+    '<button onclick="closeMainMenu();openBackups()">🗂️ Backups (restaurar)</button>'+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">🚪 Sair</button>'):'');
   document.body.appendChild(m);
   /* abre logo abaixo do botão ☰ (canto superior direito) */
@@ -1414,6 +1416,7 @@ function cancelDrawQuadra(){ endDraw(); if(_editLayer)_editLayer.clearLayers(); 
 function deleteQuadra(){
   if(!editId) return;
   if(!confirm('Excluir a quadra "'+quadraNome(editId)+'" (forma e dados)? Esta a\u00e7\u00e3o n\u00e3o pode ser desfeita.')) return;
+  safetyBackup('antes de excluir quadra '+quadraNome(editId));
   delete QGEO[editId]; if(data[editId]) delete data[editId];
   ensureLocais(); delete QLOCAL[editId]; if(QNOME) delete QNOME[editId];
   _cloudAllowShrink=true; /* exclusão intencional */
@@ -2726,6 +2729,7 @@ function saveStudy(){
 
 function deleteStudy(qid,sid,skipConfirm){
   if(!skipConfirm && !confirm("Excluir este estudo? A ação não pode ser desfeita."))return;
+  safetyBackup('antes de excluir estudo');
   var q=data[qid];if(!q||!q.estudos)return;
   q.estudos=q.estudos.filter(function(s){return s.id!==sid});
   save();
@@ -3325,6 +3329,7 @@ function quickAddAvaliacao(){
 
 function removeAplicacao(id){
   if(!confirm("Remover essa aplicação?"))return;
+  safetyBackup('antes de excluir aplicação');
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
   study.aplicacoes=study.aplicacoes.filter(function(a){return a.id!==id});
   save();
@@ -3333,6 +3338,7 @@ function removeAplicacao(id){
 
 function removeAvaliacaoV2(id){
   if(!confirm("Remover essa avaliação?"))return;
+  safetyBackup('antes de excluir avaliação');
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
   study.avaliacoes=study.avaliacoes.filter(function(a){return a.id!==id});
   save();
@@ -3341,6 +3347,7 @@ function removeAvaliacaoV2(id){
 
 function confirmDeleteStudy(qid,sid){
   if(!confirm("Excluir esse estudo? Essa ação não pode ser desfeita."))return;
+  safetyBackup('antes de excluir estudo');
   var q=data[qid];
   q.estudos=(q.estudos||[]).filter(function(s){return s.id!==sid});
   save();
@@ -3850,6 +3857,67 @@ function closeEventEdit(){
 
 
 /* ============ EXPORT / IMPORT JSON ============ */
+/* ===================== BACKUPS LOCAIS (rede de segurança: snapshot antes de ações destrutivas) ===================== */
+function safetySnap(){
+  try{ if(typeof ensureLocais==='function') ensureLocais(); }catch(e){}
+  return { ts:Date.now(),
+    data:(typeof data!=='undefined'?data:{}),
+    qgeo:(typeof QGEO!=='undefined'?QGEO:null),
+    georef:(typeof _geo!=='undefined'?_geo:null),
+    locais:(typeof LOCAIS!=='undefined'?LOCAIS:null),
+    qlocal:(typeof QLOCAL!=='undefined'?QLOCAL:null),
+    qnome:(typeof QNOME!=='undefined'?QNOME:null) };
+}
+function _safetyCounts(s){ var d=s.data||{}, est=0,ap=0,av=0;
+  Object.keys(d).forEach(function(k){ (d[k].estudos||[]).forEach(function(e){ est++; ap+=(e.aplicacoes||[]).length; av+=(e.avaliacoes||[]).length; }); });
+  return { quadras:(s.qgeo?Object.keys(s.qgeo).length:Object.keys(d).length), locais:(s.locais?Object.keys(s.locais).length:0), estudos:est, aplic:ap, aval:av };
+}
+function safetyList(){ try{ return JSON.parse(localStorage.getItem('iracema-safety')||'[]'); }catch(e){ return []; } }
+function safetyBackup(motivo){
+  try{
+    var arr=safetyList();
+    var snap=JSON.parse(JSON.stringify(safetySnap()));
+    snap.motivo=motivo||''; snap.counts=_safetyCounts(snap);
+    arr.push(snap);
+    while(arr.length>10) arr.shift();
+    try{ localStorage.setItem('iracema-safety', JSON.stringify(arr)); }
+    catch(e){ while(arr.length>2){ arr.shift(); try{ localStorage.setItem('iracema-safety', JSON.stringify(arr)); break; }catch(e2){} } }
+  }catch(e){}
+}
+function safetyApply(snap){
+  if(!snap) return;
+  safetyBackup('antes de restaurar');
+  try{
+    if(snap.data){ data=snap.data; try{ localStorage.setItem('iracema-v7', JSON.stringify(data)); }catch(e){} }
+    if(snap.qgeo){ QGEO=snap.qgeo; if(typeof saveQGEO==='function') saveQGEO(); }
+    if(snap.georef){ _geo=snap.georef; if(typeof saveGeoref==='function') saveGeoref(_geo); }
+    if(snap.locais){ LOCAIS=snap.locais; if(typeof saveLocais==='function') saveLocais(); }
+    if(snap.qlocal){ QLOCAL=snap.qlocal; if(typeof saveQLocal==='function') saveQLocal(); }
+    if(snap.qnome){ QNOME=snap.qnome; if(typeof saveQNome==='function') saveQNome(); }
+    if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
+    _cloudAllowShrink=true; /* restauração substitui (pode encolher) -> grava sem merge */
+    save(); render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
+  }catch(e){ alert('Erro ao restaurar: '+e.message); }
+}
+function openBackups(){
+  var m=document.getElementById('bkpModal');
+  if(!m){ m=document.createElement('div'); m.id='bkpModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
+  var arr=safetyList().slice().reverse();
+  var rows=arr.length? arr.map(function(s,i){
+    var c=s.counts||_safetyCounts(s), dt=new Date(s.ts);
+    return '<div style="border:1px solid #2a3a2a;border-radius:9px;padding:9px 11px;margin-top:7px;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+      '<div style="min-width:0"><div style="font-size:13px;color:#eaf3ed;font-weight:600">'+dt.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' <span style="color:#8aa88a;font-weight:400">· '+esc(s.motivo||'')+'</span></div>'+
+      '<div style="font-size:11px;color:#8aa88a">'+c.quadras+' quadras · '+c.estudos+' estudos · '+c.aplic+' aplic · '+c.aval+' aval</div></div>'+
+      '<button onclick="if(confirm(\'Restaurar este backup? O estado atual será guardado antes.\')){safetyApply(safetyList().slice().reverse()['+i+']);document.getElementById(\'bkpModal\').style.display=\'none\';alert(\'✓ Restaurado.\');}" style="flex:none;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer">Restaurar</button></div>';
+  }).join('') : '<div style="color:#8aa88a;font-size:12px;margin-top:8px">Nenhum backup local ainda. São criados automaticamente antes de excluir/importar.</div>';
+  m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:470px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">🗂️ Backups locais</b><button onclick="document.getElementById(\'bkpModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Snapshots automáticos antes de excluir/importar (só neste aparelho). Restaurar guarda o estado atual antes — nada é perdido.</div>'+
+    rows+
+    '<div style="margin-top:12px"><button onclick="exportData()" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">💾 Exportar tudo agora (arquivo)</button></div>'+
+  '</div>';
+  m.style.display='flex';
+}
 function exportData(){
   try{
     if(typeof ensureLocais==='function') ensureLocais();
@@ -3875,6 +3943,7 @@ function importData(ev){
   var f=ev.target.files[0];
   if(!f)return;
   if(!confirm('Importar esse backup vai substituir os dados atuais (e o alinhamento/formato das quadras, se o backup tiver). Continuar?')){ev.target.value='';return}
+  safetyBackup('antes de importar backup');
   var r=new FileReader();
   r.onload=function(e){
     try{
@@ -4316,6 +4385,7 @@ function init(){
     render();
   injectTopbarButtons();updateTodayBadge();renderLeg();updateAgendaBadge();
   ensureLocais(); buildLocalChip(); try{ flyToLocal(localAtivo); }catch(e){}
+  try{ safetyBackup('ao abrir'); }catch(e){}
   if(typeof authInit==='function') authInit(); else if(typeof cloudStart==='function') cloudStart();
   }catch(e){
     var b=document.createElement('div');
