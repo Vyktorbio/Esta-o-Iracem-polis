@@ -1491,10 +1491,31 @@ function _mergeById(la,ca,mergeFn){
   la.forEach(function(x){ if(!x||!x.id)return; if(byId[x.id]){ byId[x.id]=mergeFn?mergeFn(x,byId[x.id]):x; } else { order.push(x.id); byId[x.id]=x; } });
   return order.map(function(id){ return byId[id]; });
 }
+/* Merge de UMA avaliação: une variáveis/tipos e as notas POR TRATAMENTO e POR VARIÁVEL
+   (dois técnicos lançando tratamentos diferentes na mesma avaliação não se apagam).
+   Valor local não-vazio vence; valor vazio NÃO sobrescreve o que o outro já preencheu. */
+function _mergeAval(la,ca){
+  var m={},k; for(k in ca)m[k]=ca[k]; for(k in la)m[k]=la[k]; /* campos escalares: prefere local */
+  var vars=(ca.variaveis||[]).slice();
+  (la.variaveis||[]).forEach(function(v){ if(vars.indexOf(v)<0) vars.push(v); });
+  m.variaveis=vars;
+  var tipos={},t; for(t in (ca.tipos||{}))tipos[t]=ca.tipos[t]; for(t in (la.tipos||{}))tipos[t]=la.tipos[t]; m.tipos=tipos;
+  var cN=ca.notas||{}, lN=la.notas||{}, trats={}, tr;
+  for(tr in cN)trats[tr]=1; for(tr in lN)trats[tr]=1;
+  var notas={};
+  Object.keys(trats).forEach(function(tr){
+    var cr=cN[tr]||{}, lr=lN[tr]||{}, row={}, vv;
+    for(vv in cr) row[vv]=cr[vv];
+    for(vv in lr){ var lv=lr[vv]; if(lv!==''&&lv!=null) row[vv]=lv; else if(!(vv in row)) row[vv]=lv; }
+    notas[tr]=row;
+  });
+  m.notas=notas;
+  return m;
+}
 function _mergeStudy(ls,cs){
   var m={},k; for(k in cs)m[k]=cs[k]; for(k in ls)m[k]=ls[k]; /* prefere campos locais; mantém campos só-da-nuvem */
   m.aplicacoes=_mergeById(ls.aplicacoes,cs.aplicacoes,null);
-  m.avaliacoes=_mergeById(ls.avaliacoes,cs.avaliacoes,null);
+  m.avaliacoes=_mergeById(ls.avaliacoes,cs.avaliacoes,_mergeAval);
   if(!(ls.tratamentos&&ls.tratamentos.length)&&(cs.tratamentos&&cs.tratamentos.length)) m.tratamentos=cs.tratamentos;
   return m;
 }
