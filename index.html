@@ -1327,7 +1327,9 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();toggleQuadraEdit()">✏️ Editar quadras</button>'+
     '<button onclick="closeMainMenu();startGeoref()">📍 Alinhar mapa</button>'+
     '<div class="mm-sep"></div>'+
-    '<button onclick="closeMainMenu();exportData()">💾 Backup</button>'+
+    '<button onclick="closeMainMenu();exportXlsx(false)">📊 Exportar planilha (Excel/Sheets)</button>'+
+    '<div class="mm-sep"></div>'+
+    '<button onclick="closeMainMenu();exportData()">💾 Backup (arquivo)</button>'+
     '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">📥 Importar</button>'+
     '<button onclick="closeMainMenu();openBackups()">🗂️ Backups (restaurar)</button>'+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">🚪 Sair</button>'):'');
@@ -3938,6 +3940,58 @@ function exportData(){
     document.body.appendChild(a);a.click();document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }catch(e){alert('Erro ao exportar: '+e.message)}
+}
+/* ===================== EXPORTAR PLANILHA EXCEL (.xlsx) ===================== */
+function _loadSheetJS(cb){
+  if(window.XLSX){ cb(); return; }
+  var s=document.createElement('script');
+  s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  s.onload=function(){ cb(window.XLSX?null:new Error('Biblioteca não carregou.')); };
+  s.onerror=function(){ cb(new Error('Não consegui baixar a biblioteca da planilha (precisa de internet).')); };
+  document.head.appendChild(s);
+}
+function _locNome(qid){ try{ ensureLocais(); }catch(e){} var l=(QLOCAL&&QLOCAL[qid])||HOME_LOCAL; return (LOCAIS&&LOCAIS[l]&&LOCAIS[l].nome)||(LOCAIS&&LOCAIS[HOME_LOCAL]&&LOCAIS[HOME_LOCAL].nome)||''; }
+function exportXlsx(soDoLocal){
+  _loadSheetJS(function(err){
+    if(err){ alert(err.message); return; }
+    try{ _buildXlsx(soDoLocal); }catch(e){ alert('Erro ao gerar planilha: '+e.message); }
+  });
+}
+function _buildXlsx(soDoLocal){
+  var XLSX=window.XLSX;
+  function num(x){ return (x==null||x==='')?'':x; }
+  var tidy=[['Local','Quadra','Cultura','Cultivar','Estudo','Descricao','Data_avaliacao','Tipo','BBCH','Tratamento','Produto','Variavel','Valor','Registrado_em','Clima_fonte','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI','NDRE','Lat','Lng']];
+  var apl=[['Local','Quadra','Estudo','Data_aplicacao','BBCH','Obs','Registrado_em','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI']];
+  var est=[['Local','Quadra','Cultura','Cultivar','Estudo','Descricao','Inicio','N_aplicacoes','Intervalo_dias','Repeticoes','N_tratamentos','N_parcelas','Area_ha','Comprimento_m','Largura_m','Lat','Lng']];
+  Object.keys(data).forEach(function(qid){
+    var q=data[qid]; if(!q||!Array.isArray(q.estudos)||!q.estudos.length) return;
+    if(soDoLocal && ((QLOCAL&&QLOCAL[qid])||HOME_LOCAL)!==localAtivo) return;
+    var locNome=_locNome(qid), aHa=quadraAreaHa(qid), dim=quadraDims(qid), ctr=quadraCenter(qid), qn=quadraNome(qid);
+    q.estudos.forEach(function(s){
+      s=normalizeStudy(s);
+      est.push([locNome,qn,q.cultura||'',q.cultivar||'',s.codigo||'',s.descricao||'',isoToBR(s.dataInicio)||'',s.numAplicacoes,s.intervaloDias,s.numRepeticoes,s.tratamentos.length,s.tratamentos.length*s.numRepeticoes,aHa!=null?+aHa.toFixed(3):'',dim?Math.round(dim.comprimento):'',dim?Math.round(dim.largura):'',ctr?+ctr[0].toFixed(6):'',ctr?+ctr[1].toFixed(6):'']);
+      var prod={}; s.tratamentos.forEach(function(t){ prod[t.id]=t.produto||''; });
+      s.aplicacoes.forEach(function(a){ var c=a.carimbo||{}, cl=c.clima||{};
+        apl.push([locNome,qn,s.codigo||'',isoToBR(a.data)||'',a.bbch||'',a.obs||'',c.data||'',num(cl.temp),num(cl.umidade),num(cl.vpd),num(cl.vento),num(cl.chuva),(c.ndvi&&c.ndvi.ndvi!=null)?c.ndvi.ndvi:'']); });
+      s.avaliacoes.forEach(function(a){ var c=a.carimbo||{}, cl=c.clima||{}, vars=a.variaveis||[];
+        var lat=c.gps?+c.gps.lat.toFixed(6):(c.centro&&c.centro.length===2?+c.centro[0].toFixed(6):''), lng=c.gps?+c.gps.lng.toFixed(6):(c.centro&&c.centro.length===2?+c.centro[1].toFixed(6):'');
+        var ndvi=(c.ndvi&&c.ndvi.ndvi!=null)?c.ndvi.ndvi:'', ndre=(c.ndvi&&c.ndvi.ndre!=null)?c.ndvi.ndre:'';
+        if(vars.length && s.tratamentos.length){
+          s.tratamentos.forEach(function(t){ var row=(a.notas&&a.notas[t.id])||{};
+            vars.forEach(function(v){ tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',s.codigo||'',s.descricao||'',isoToBR(a.data)||'',a.tipo||'',a.bbch||'',t.id,prod[t.id]||'',v,num(row[v]),c.data||'',cl.fonte||'',num(cl.temp),num(cl.umidade),num(cl.vpd),num(cl.vento),num(cl.chuva),ndvi,ndre,lat,lng]); });
+          });
+        } else {
+          tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',s.codigo||'',s.descricao||'',isoToBR(a.data)||'',a.tipo||'',a.bbch||'','','','',a.obs||'',c.data||'',cl.fonte||'',num(cl.temp),num(cl.umidade),num(cl.vpd),num(cl.vento),num(cl.chuva),ndvi,ndre,lat,lng]);
+        }
+      });
+    });
+  });
+  if(tidy.length<=1 && est.length<=1){ alert('Não há estudos para exportar'+(soDoLocal?' neste local.':'.')); return; }
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(tidy), 'Dados');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(apl), 'Aplicacoes');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(est), 'Estudos');
+  XLSX.writeFile(wb, 'ensaios-'+todayISO()+'.xlsx');
 }
 function importData(ev){
   var f=ev.target.files[0];
