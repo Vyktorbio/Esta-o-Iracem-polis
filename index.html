@@ -677,6 +677,45 @@ _:[{m:20,s:"09",l:"Inicial",c:"#66bb6a"},{m:60,s:"19",l:"Vegetativo",c:"#2e7d32"
 };
 var CC={Soja:"#4caf50","Algodão":"#bcaaa4",Café:"#8d6e63",Milho:"#fbc02d","Feijão":"#7cb342",Tomate:"#ef5350",Morango:"#ec407a","Melão":"#ffca28","Cana de açúcar":"#43a047",Pastagem:"#66bb6a",CITROS:"#ff9800",ESTUFAS:"#78909c",Pousio:"#757575",_:"#66bb6a"};
 var CL=["Soja","Algodão","Milho","Café","Feijão","Tomate","Morango","Melão","Cana de açúcar","Pastagem","CITROS","ESTUFAS","Pousio"];
+/* ===== Culturas adicionais por GRUPO BBCH (estende FEN/CC/CL de forma aditiva) ===== */
+function _fenRamp(a){ var r=["#66bb6a","#43a047","#2e7d32","#9ccc65","#cddc39","#fdd835","#ffb300","#f57c00","#d84315","#8d6e63"]; var n=a.length;
+  return a.map(function(s,i){ return {m:s[0],s:s[1],l:s[2],c:r[Math.min(r.length-1,Math.round(i*(r.length-1)/Math.max(1,n-1)))]}; }); }
+var _GT={
+  cereais:_fenRamp([[10,"09","Emergência"],[30,"21","Perfilhamento"],[55,"31","Alongamento"],[75,"55","Espigamento"],[90,"65","Floração"],[110,"75","Grão leitoso"],[130,"87","Grão duro"],[9999,"99","Colheita"]]),
+  arroz:_fenRamp([[12,"09","Emergência"],[35,"21","Perfilhamento"],[60,"30","Elongação"],[80,"45","Emborrachamento"],[95,"65","Floração"],[115,"75","Grão leitoso"],[135,"87","Grão duro"],[9999,"99","Colheita"]]),
+  sorgo:_fenRamp([[8,"09","Emergência"],[28,"14","Veg. inicial"],[55,"30","Elongação"],[70,"51","Emborrachamento"],[85,"65","Floração"],[110,"75","Grão leitoso"],[130,"87","Grão duro"],[9999,"99","Colheita"]]),
+  leguminosas:_fenRamp([[8,"09","Emergência"],[22,"13","Desenv. veg."],[40,"51","Pré-floração"],[50,"61","Floração"],[65,"71","Form. vagens"],[85,"79","Ench. grãos"],[105,"89","Maturação"],[9999,"99","Colheita"]]),
+  oleaginosas:_fenRamp([[10,"09","Emergência"],[30,"16","Desenv. veg."],[55,"51","Botão floral"],[70,"61","Floração"],[95,"71","Form. frutos"],[120,"79","Enchimento"],[9999,"89","Maturação"]]),
+  solanaceas:_fenRamp([[12,"11","Mudas/Transpl."],[35,"19","Vegetativo"],[55,"61","Floração"],[80,"71","Frutificação"],[110,"81","Mat. frutos"],[9999,"89","Colheita"]]),
+  raizes:_fenRamp([[15,"09","Emergência"],[35,"20","Parte aérea"],[55,"40","Engross. raiz/tubérculo"],[80,"60","Floração"],[110,"80","Enchimento"],[9999,"95","Colheita"]]),
+  cucurbitaceas:_fenRamp([[8,"09","Emergência"],[25,"19","Vegetativo"],[40,"61","Floração"],[60,"71","Frutificação"],[9999,"89","Colheita"]]),
+  brassicas:_fenRamp([[12,"11","Mudas/Transpl."],[35,"19","Vegetativo"],[60,"41","Form. cabeça"],[90,"49","Cabeça desenv."],[9999,"89","Colheita"]]),
+  allium:_fenRamp([[15,"09","Emergência"],[45,"13","Desenv. folhas"],[90,"41","Form. bulbo"],[130,"47","Bulbo desenv."],[9999,"49","Colheita"]]),
+  folhosas:_fenRamp([[10,"11","Mudas"],[25,"19","Vegetativo"],[40,"41","Form. cabeça/roseta"],[9999,"49","Colheita"]]),
+  forrageira:[{m:9999,s:"EST",l:"Forrageira estab.",c:"#66bb6a"}],
+  perene:[{m:9999,s:"PER",l:"Perene",c:"#f57c00"}]
+};
+var _GRPCOR={cereais:"#cda434",arroz:"#aed581",sorgo:"#c17900",leguminosas:"#7cb342",oleaginosas:"#fbc02d",solanaceas:"#ef5350",raizes:"#a1887f",cucurbitaceas:"#9ccc65",brassicas:"#4db6ac",allium:"#ce93d8",folhosas:"#81c784",forrageira:"#66bb6a",perene:"#ff9800"};
+var _NEWC={
+  cereais:["Trigo","Cevada","Aveia","Centeio","Triticale"],
+  arroz:["Arroz"],
+  sorgo:["Sorgo","Milheto"],
+  leguminosas:["Caupi","Ervilha","Grão-de-bico","Lentilha"],
+  oleaginosas:["Girassol","Canola","Amendoim","Gergelim"],
+  solanaceas:["Pimentão","Pimenta","Berinjela"],
+  raizes:["Batata","Batata-doce","Mandioca","Cenoura","Beterraba"],
+  cucurbitaceas:["Melancia","Pepino","Abóbora","Abobrinha"],
+  brassicas:["Brócolis","Couve-flor","Repolho","Couve"],
+  allium:["Cebola","Alho"],
+  folhosas:["Alface","Rúcula","Espinafre"],
+  forrageira:["Braquiária","Urochloa","Mombaça","Panicum","Tifton","Cynodon","Azevém","Alfafa","Aveia forrageira"],
+  perene:["Uva","Maçã","Pera","Pêssego","Ameixa","Banana","Manga","Abacate","Goiaba","Mamão","Maracujá","Abacaxi","Coco","Caqui","Cacau","Seringueira","Dendê","Oliveira","Erva-mate","Chá","Eucalipto"]
+};
+Object.keys(_NEWC).forEach(function(g){ _NEWC[g].forEach(function(name){
+  if(!FEN[name]) FEN[name]=_GT[g];
+  if(!CC[name]) CC[name]=_GRPCOR[g]||"#66bb6a";
+  if(CL.indexOf(name)<0) CL.push(name);
+}); });
 var DD={
 A1:{cultura:"Café",cultivar:"Catuaí vermelho",plantio:"15/03/2011",area:0.56,estudos:[]},
 A2:{cultura:"Algodão",cultivar:"FM 944 GL",plantio:"01/06/2026",area:0.98,estudos:[]},
@@ -3015,6 +3054,17 @@ var BBCH_MAP = {
   "ESTUFAS":"estufa",
   "Estufa":"estufa"
 };
+/* Mapeia as culturas novas ao melhor BBCH detalhado existente (seletor de estádio na avaliação) */
+(function(){
+  var add={ milho:["Trigo","Cevada","Aveia","Centeio","Triticale","Arroz","Sorgo","Milheto"],
+    feijao:["Caupi","Ervilha","Grão-de-bico","Lentilha"],
+    soja:["Girassol","Canola","Amendoim","Gergelim"],
+    tomate:["Pimentão","Pimenta","Berinjela"],
+    melao:["Melancia","Pepino","Abóbora","Abobrinha"],
+    pastagem:["Braquiária","Urochloa","Mombaça","Panicum","Tifton","Cynodon","Azevém","Alfafa","Aveia forrageira"],
+    citros:["Uva","Maçã","Pera","Pêssego","Ameixa","Banana","Manga","Abacate","Goiaba","Mamão","Maracujá","Abacaxi","Coco","Caqui","Cacau","Seringueira","Dendê","Oliveira","Erva-mate","Chá","Eucalipto"] };
+  Object.keys(add).forEach(function(sc){ add[sc].forEach(function(n){ if(!BBCH_MAP[n]) BBCH_MAP[n]=sc; }); });
+})();
 
 function getBBCHList(cultura){
   var k=BBCH_MAP[cultura];
