@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VMap Campo — Mapa de Estudos</title>
+<title>Mapa de Estudos</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;background:#050805}
@@ -316,7 +316,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="VMap Campo">
+<meta name="apple-mobile-web-app-title" content="Mapa de Estudos">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=7').catch(function(){});});}</script>
 <style>
@@ -602,7 +602,7 @@ body.map-full .top-bar,body.map-full .toolbar-extra,body.map-full .leaflet-contr
 .rot-ctl button{background:rgba(255,255,255,.95)!important;color:#28312c!important;border-color:var(--border)!important} .rot-ctl button:hover{color:var(--accent-d)!important}
 </style>
 <style id="fieldConsoleTheme">
-/* ===================== TEMA VMap Campo - console operacional ===================== */
+/* ===================== TEMA Mapa de Estudos - console operacional ===================== */
 :root{
   --vm-bg:#0c1110;
   --vm-glass:rgba(15,20,18,.88);
@@ -706,28 +706,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Robot
   -webkit-backdrop-filter:blur(18px)!important;
 }
 .toolbar-extra button{
-  min-width:72px!important;
-  height:42px!important;
-  padding:0 12px!important;
-  display:inline-flex!important;
-  align-items:center!important;
-  justify-content:center!important;
-  gap:7px!important;
-  border-radius:10px!important;
-  border:1px solid rgba(255,255,255,.13)!important;
-  background:rgba(255,255,255,.08)!important;
-  color:#eef4f0!important;
+  min-width:0!important;
+  padding:0!important;
+  background:transparent!important;
+  border:none!important;
   box-shadow:none!important;
-  font-size:12px!important;
-  font-weight:780!important;
-  letter-spacing:.15px!important;
 }
-.toolbar-extra button:hover{background:rgba(255,255,255,.14)!important;border-color:rgba(255,255,255,.22)!important}
-.tool-ico{height:22px;min-width:24px;padding:0 5px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.11);color:#fff;font-size:10px;font-weight:850;letter-spacing:.2px}
-.tool-ndvi .tool-ico{background:rgba(33,168,107,.22);color:#dbfae8}
-.tool-clima .tool-ico{background:rgba(47,133,201,.24);color:#e0f0ff}
-.tool-measure .tool-ico{background:rgba(214,148,49,.24);color:#fff0d5}
-.tool-gps .tool-ico{background:rgba(215,90,78,.22);color:#ffe2df}
+.toolbar-extra button:hover{background:transparent!important;border-color:transparent!important}
+.toolbar-extra button:hover .tool-ico{filter:brightness(1.18)}
+.toolbar-extra button:active .tool-ico{transform:translateY(1px)}
+.tool-ico{height:40px;min-width:48px;padding:0 14px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.11);color:#fff;font-size:13px;font-weight:850;letter-spacing:.3px;transition:filter .15s,transform .07s}
+.tool-ndvi .tool-ico{background:rgba(33,168,107,.30);color:#dbfae8}
+.tool-clima .tool-ico{background:rgba(47,133,201,.32);color:#e0f0ff}
+.tool-measure .tool-ico{background:rgba(214,148,49,.30);color:#fff0d5}
+.tool-gps .tool-ico{background:rgba(215,90,78,.30);color:#ffe2df}
 
 /* Superfícies e modais */
 .panel,.edit-panel,.se-panel,.ndvi-panel,.gr-panel,.agenda-panel,.legend-panel,.main-menu,.loc-menu,.loc-box{
@@ -817,22 +809,43 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Robot
 	.measure-actions button.on{background:#1f8a52!important;color:#fff!important;border-color:#58d891!important}
 	.measure-actions button.danger{background:#7f251f!important;color:#fff!important;border-color:#c44a40!important}
 
+/* ===== Avaliação: contraste no tema claro (fundo claro→texto escuro; card automático escuro→texto claro) ===== */
+.av-table th{background:#eef2ee!important;color:#2c3a33!important;border-color:#d7ded8!important}
+.av-tname{background:#eef2ee!important;color:#15663c!important}
+.av-cell{background:#fff!important;color:#16201b!important;border-color:#cdd6cf!important}
+.av-cell::placeholder{color:#9aa6a0!important}
+.av-step{background:rgba(31,138,82,.12)!important;color:#15663c!important;border-color:#bcdcc8!important}
+.av-step:active{background:rgba(31,138,82,.26)!important}
+.av-addcol{background:rgba(31,138,82,.12)!important;color:#15663c!important;border-color:#bcdcc8!important}
+.av-delcol{color:#b23b32!important}
+.av-hint,.av-auto-note{color:#55615b!important}
+.av-auto-toggle{background:#1f8a52!important;color:#f1faf3!important}
+.av-auto-toggle.off{background:#eef2ee!important;color:#15663c!important;border:1px solid #bcdcc8!important}
+/* Card de foco (modo automático): fundo escuro -> texto claro, alto contraste */
+.av-auto-box{background:#10211a!important;border:1px solid #2f6b45!important;box-shadow:var(--vm-shadow)!important}
+.av-auto-top{color:#bfe6cd!important}
+.av-auto-main{color:#f2faf4!important}
+.av-auto-sub{color:#aecbb7!important}
+.av-auto-input{background:#fff!important;color:#0f1d16!important;border:1px solid #58d891!important}
+.av-auto-count button{background:#1f7a47!important;color:#eafff2!important;border-color:#34935a!important}
+.av-auto-nav button{background:#17291f!important;color:#cfeada!important;border:1px solid #2f6b45!important}
+
 @media (max-width:700px){
   .top-bar{align-items:stretch!important;padding:8px 10px!important;gap:8px!important}
   .top-bar>div:first-child{justify-content:space-between}
   .top-bar-right{justify-content:flex-start!important;overflow-x:auto!important;flex-wrap:nowrap!important;padding-bottom:1px}
   .top-bar-info{display:none!important}
   .loc-chip{max-width:56vw!important}
-  .toolbar-extra{left:10px!important;right:10px!important;bottom:10px!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important}
-  .toolbar-extra button{min-width:0!important;height:44px!important;padding:0 6px!important;font-size:11px!important}
-  .tool-ico{display:none}
+  .toolbar-extra{left:auto!important;right:10px!important;bottom:10px!important;display:flex!important;gap:7px!important}
+  .toolbar-extra button{min-width:0!important;height:auto!important;padding:0!important}
+  .tool-ico{display:inline-flex!important;height:42px;min-width:46px;font-size:12px}
   .panel,.edit-panel,.se-panel{max-width:calc(100vw - 18px)!important}
 }
 </style>
 </head>
 <body>
 <div class="top-bar">
-<div><h1>VMap Campo</h1></div>
+<div><h1>Mapa de Estudos</h1></div>
 <div class="top-bar-right">
 <span class="top-bar-info" id="dateInfo"></span>
 <button class="btn-sm" id="btnAgenda" onclick="toggleAgenda()">AGENDA <span id="agendaBadge" style="color:#ff5252;font-weight:700"></span></button>
@@ -862,10 +875,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Robot
 
 <!-- Toolbar de backup -->
 <div class="toolbar-extra">
-<button class="tool-ndvi" onclick="toggleNdvi()" title="Camadas NDVI / NDRE / GNDVI (Sentinel-2)"><span class="tool-ico">ND</span><span>NDVI</span></button>
-<button class="tool-clima" onclick="toggleClima()" title="Clima ao vivo da estação meteorológica (Ecowitt)"><span class="tool-ico">WX</span><span>Clima</span></button>
-<button class="tool-measure" onclick="toggleMeasure()" title="Medir área no mapa ou com o GPS"><span class="tool-ico">m²</span><span>Medir</span></button>
-<button class="tool-gps" onclick="locateMe()" title="Mostrar minha localização (GPS)"><span class="tool-ico">GPS</span><span>GPS</span></button>
+<button class="tool-ndvi" onclick="toggleNdvi()" title="Camadas NDVI / NDRE / GNDVI (Sentinel-2)" aria-label="NDVI"><span class="tool-ico">NDVI</span></button>
+<button class="tool-clima" onclick="toggleClima()" title="Clima ao vivo da estação meteorológica (Ecowitt)" aria-label="Clima"><span class="tool-ico">Clima</span></button>
+<button class="tool-measure" onclick="toggleMeasure()" title="Medir área no mapa ou com o GPS" aria-label="Medir"><span class="tool-ico">m²</span></button>
+<button class="tool-gps" onclick="locateMe()" title="Mostrar minha localização (GPS)" aria-label="GPS"><span class="tool-ico">GPS</span></button>
 <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">
 </div>
 
@@ -2029,7 +2042,7 @@ function cloudBadge(kind,txt){
 function cloudApply(st){
   if(!st) return;
   /* não atropela edição de quadra em andamento — guarda e aplica ao terminar */
-  if(window._qEditing){ _cloudPending=st; return; }
+  if(window._qEditing || window._avEditing){ _cloudPending=st; return; }
   /* não aplica um estado MAIS ANTIGO sobre um mais novo (protege de push obsoleto/realtime) */
   if(st.rev!=null && _cloudRev!=null && st.rev < _cloudRev){ return; }
   _cloudApplying=true;
@@ -2135,27 +2148,32 @@ function cloudMerge(local,cloud){
 function cloudSave(){
   if(!cloudInit() || _cloudApplying || !_cloudInitDone) return; /* só escreve depois de ter lido a nuvem */
   cloudBadge('saving');
-  var localState=cloudState();
   var allowShrink=_cloudAllowShrink; _cloudAllowShrink=false;
+  _cloudSaveAttempt(allowShrink, 0);
+}
+/* Gravação com RETRY (concorrência otimista): relê a nuvem, faz MERGE preservando o local e grava.
+   Se o banco RECUSA (revisão já avançou em outro aparelho), RE-TENTA — relê, re-merge e regrava —
+   sem perder o que foi digitado aqui. Só desiste após várias falhas (aí puxa a versão boa). */
+function _cloudSaveAttempt(allowShrink, tries){
+  if(!cloudInit()){ cloudBadge('error'); return; }
+  var localState=cloudState();
   try{
-    /* RELÊ a nuvem e faz MERGE antes de gravar — assim, se outro aparelho adicionou algo,
-       não se perde. Exclusão intencional (allowShrink) grava como está (a deleção precisa valer). */
     SB.from('app_state').select('state').eq('id',1).single().then(function(res){
       var cs = res && res.data && res.data.state;
       var cRev = (cs && cs.rev!=null) ? cs.rev : 0;
       var toSave = (allowShrink || !cs) ? localState : cloudMerge(localState, cs);
-      _cloudRev=(cRev||0)+1; toSave.rev=_cloudRev;
+      var newRev = (cRev||0)+1; toSave.rev=newRev;
       if(allowShrink) toSave._allowShrink=true; /* avisa o banco: encolhimento é exclusão intencional */
-      if(!allowShrink && cs){ try{ cloudApply(toSave); }catch(e){} } /* reflete o merge na tela (ganha o que o outro adicionou) */
+      if(!allowShrink && cs){ try{ cloudApply(toSave); }catch(e){} } /* reflete o merge e mantém o local p/ a próxima tentativa */
       SB.from('app_state').update({ state: toSave, updated_at:new Date().toISOString() }).eq('id',1)
         .then(function(r2){
           if(r2 && r2.error){
-            /* o banco RECUSOU (conflito/velha) -> não insiste; puxa a versão boa da nuvem */
-            cloudBadge('error','— sincronizando');
-            setTimeout(function(){ try{ cloudPull(); }catch(e){} }, 600);
-          } else { cloudBadge('saved'); }
-        }, function(){ cloudBadge('error'); });
-    }, function(){ cloudBadge('error'); });
+            /* banco RECUSOU (rev velha/conflito) -> re-tenta do zero (relê+merge+regrava), preservando o local */
+            if(tries<4){ cloudBadge('saving'); setTimeout(function(){ _cloudSaveAttempt(allowShrink, tries+1); }, 250+tries*300); }
+            else { cloudBadge('error','— toque p/ tentar'); setTimeout(function(){ try{ cloudPull(); }catch(e){} }, 800); }
+          } else { _cloudRev=newRev; cloudBadge('saved'); }
+        }, function(){ if(tries<4){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, tries+1); }, 400+tries*300); } else cloudBadge('error'); });
+    }, function(){ if(tries<3){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, tries+1); }, 500); } else cloudBadge('error'); });
   }catch(e){ cloudBadge('error'); }
 }
 function cloudSaveSoon(){ if(_cloudApplying || !_cloudInitDone) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
@@ -2222,7 +2240,7 @@ function buildAuthGate(){
   var g=document.getElementById('authGate');
   if(!g){ g=document.createElement('div'); g.id='authGate'; g.className='auth-gate'; document.body.appendChild(g); }
   g.innerHTML='<form class="auth-box" onsubmit="return false">'+
-    '<div class="auth-logo">VMap Campo</div>'+
+    '<div class="auth-logo">Mapa de Estudos</div>'+
     '<div class="auth-title">Entrar</div>'+
     '<div class="auth-sub">Acesso restrito</div>'+
     '<label class="auth-l">E-MAIL</label><input id="authEmail" class="auth-i" type="email" autocomplete="username" inputmode="email" placeholder="voce@exemplo.com">'+
@@ -4523,7 +4541,7 @@ function openStudyEditAplicacao(aid){
   h+='<div class="se-actions"><button class="btn-save" onclick="saveAplicacao()">SALVAR</button><button class="btn-cancel" onclick="closeEventEdit()">Cancelar</button></div>';
 
   document.getElementById("eePnl").innerHTML=h;
-  document.getElementById("eeOvl").classList.add("open");
+  window._avEditing=true; document.getElementById("eeOvl").classList.add("open");
 }
 
 /* ===================== AUTO-CARIMBO (data/hora + GPS + clima + NDVI no registro) ===================== */
@@ -4920,7 +4938,7 @@ function openStudyEditAvaliacao(aid,tipoSugerido){
 
   document.getElementById("eePnl").innerHTML=h;
   renderAvGrid();
-  document.getElementById("eeOvl").classList.add("open");
+  window._avEditing=true; document.getElementById("eeOvl").classList.add("open");
 }
 
 function saveAvaliacao(){
@@ -4951,6 +4969,8 @@ function closeEventEdit(){
   document.getElementById("eeOvl").classList.remove("open");
   editingAplId=null;editingAvId=null;
   draftAp=null;draftAv=null;
+  window._avEditing=false;
+  try{ if(typeof cloudApplyPending==='function') cloudApplyPending(); }catch(e){}
 }
 
 
