@@ -1783,11 +1783,12 @@ function excluirLocal(id){
   var qs=quadrasDoLocal(id), nome=LOCAIS[id].nome;
   requireDeletePassword('Excluir o local "'+nome+'"'+(qs.length?(' e suas '+qs.length+' quadra(s).'):'.'), function(){
     safetyBackup('antes de excluir local '+nome);
-    qs.forEach(function(q){ delete QGEO[q]; if(data[q]) delete data[q]; delete QLOCAL[q]; if(QNOME) delete QNOME[q]; });
+    qs.forEach(function(q){ delete QGEO[q]; if(data[q]) delete data[q]; delete QLOCAL[q]; if(QNOME) delete QNOME[q]; _delQuadras[q]=Date.now(); });
     delete LOCAIS[id];
+    _delLocais[id]=Date.now(); saveDelTombs(); /* tombstones: não ressuscitam no merge */
     var resto=Object.keys(LOCAIS);
     if(localAtivo===id) localAtivo=resto[0];
-    _cloudAllowShrink=true; /* exclusão intencional: pode encolher */
+    _cloudAllowShrink=true; /* exclusão intencional (merge preserva adições de outros aparelhos) */
     saveQGEO(); save(); saveLocais(); saveQLocal(); saveQNome();
     if(typeof updateAgendaBadge==='function') updateAgendaBadge();
     setLocalAtivo(localAtivo);
@@ -1994,7 +1995,8 @@ function deleteQuadra(){
     safetyBackup('antes de excluir quadra '+nome);
     delete QGEO[id]; if(data[id]) delete data[id];
     ensureLocais(); delete QLOCAL[id]; if(QNOME) delete QNOME[id];
-    _cloudAllowShrink=true; /* exclusão intencional */
+    _delQuadras[id]=Date.now(); saveDelTombs(); /* tombstone: não ressuscita no merge */
+    _cloudAllowShrink=true; /* exclusão intencional (merge preserva o que outro aparelho adicionou) */
     saveQLocal(); saveQNome();
     saveQGEO(); save(); editId=null; render(); buildEditPanel(); updateAgendaBadge();
   });
@@ -2025,7 +2027,7 @@ var SB=null, _cloudApplying=false, _cloudTimer=null, _cloudCh=null, _cloudReady=
    (impede que um cliente recém-aberto, com dados velhos, atropele a nuvem). */
 var _cloudRev=null, _cloudInitDone=false;
 function cloudInit(){ if(SB) return SB; try{ if(window.supabase && SUPABASE_URL) SB=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }catch(e){ SB=null; } return SB; }
-function cloudState(){ ensureQGEO(); ensureLocais(); return { data:data, qgeo:QGEO, georef:_geo, locais:LOCAIS, qlocal:QLOCAL, qnome:QNOME, randomizacoes:RZLIB, rev:(_cloudRev||0) }; }
+function cloudState(){ ensureQGEO(); ensureLocais(); return { data:data, qgeo:QGEO, georef:_geo, locais:LOCAIS, qlocal:QLOCAL, qnome:QNOME, randomizacoes:RZLIB, _deletedQuadras:_delQuadras, _deletedLocais:_delLocais, rev:(_cloudRev||0) }; }
 /* Indicador visível de sincronização (toque = forçar sync) */
 function cloudBadge(kind,txt){
   if(!document.getElementById('cloudBadgeCss')){
@@ -2055,6 +2057,9 @@ function cloudApply(st){
     if(st.qlocal && typeof st.qlocal==='object'){ QLOCAL=st.qlocal; try{ localStorage.setItem(QLOCAL_KEY, JSON.stringify(QLOCAL)); }catch(e){} }
     if(st.qnome && typeof st.qnome==='object'){ QNOME=st.qnome; try{ localStorage.setItem(QNOME_KEY, JSON.stringify(QNOME)); }catch(e){} }
     if(Array.isArray(st.randomizacoes)){ RZLIB=normalizeRZLib(st.randomizacoes); try{ localStorage.setItem(RZLIB_KEY, JSON.stringify(RZLIB)); }catch(e){} }
+    if(st._deletedQuadras && typeof st._deletedQuadras==='object'){ _delQuadras=_mergeObj(_delQuadras, st._deletedQuadras); }
+    if(st._deletedLocais && typeof st._deletedLocais==='object'){ _delLocais=_mergeObj(_delLocais, st._deletedLocais); }
+    saveDelTombs();
     if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]}; }); }
     ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip();
     render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
@@ -2062,7 +2067,13 @@ function cloudApply(st){
   _cloudApplying=false;
 }
 function cloudApplyPending(){ if(_cloudPending && !window._qEditing){ var p=_cloudPending; _cloudPending=null; cloudApply(p); } }
-var _cloudAllowShrink=false; /* só true em exclusão intencional estrutural (local/quadra/restauração) */
+var _cloudAllowShrink=false; /* exclusão de quadra/local: merge preserva adições de outros + tombstone remove o alvo */
+var _cloudReplace=false; /* restauração/import: grava o estado como está (substitui, sem merge) */
+/* Tombstones de exclusão de QUADRA/LOCAL — deletar SEM perder o que outro aparelho adicionou. */
+var DELQ_KEY="iracema-delq-v1", DELL_KEY="iracema-dell-v1";
+var _delQuadras=(function(){try{return JSON.parse(localStorage.getItem(DELQ_KEY)||'{}')||{};}catch(e){return {};}})();
+var _delLocais=(function(){try{return JSON.parse(localStorage.getItem(DELL_KEY)||'{}')||{};}catch(e){return {};}})();
+function saveDelTombs(){ try{ localStorage.setItem(DELQ_KEY,JSON.stringify(_delQuadras)); localStorage.setItem(DELL_KEY,JSON.stringify(_delLocais)); }catch(e){} }
 /* ===== Merge por entidade: une quadras/estudos/aplicações/avaliações por id, p/ NÃO perder
    o que outro aparelho adicionou quando dois salvam quase ao mesmo tempo. ===== */
 function _mergeById(la,ca,mergeFn,deleted){
@@ -2127,15 +2138,20 @@ function _mergeStudy(ls,cs){
 function cloudMerge(local,cloud){
   if(!cloud) return local; if(!local) return cloud;
   var out={};
-  out.qgeo=_mergeObj(local.qgeo,cloud.qgeo);
-  out.qlocal=_mergeObj(local.qlocal,cloud.qlocal);
-  out.qnome=_mergeObj(local.qnome,cloud.qnome);
-  out.locais=_mergeObj(local.locais,cloud.locais);
+  var delQ=_mergeObj(local._deletedQuadras,cloud._deletedQuadras)||{};
+  var delL=_mergeObj(local._deletedLocais,cloud._deletedLocais)||{};
+  out._deletedQuadras=delQ; out._deletedLocais=delL;
+  function strip(obj,tomb){ var o={},k; for(k in (obj||{})){ if(!tomb[k]) o[k]=obj[k]; } return o; }
+  out.qgeo=strip(_mergeObj(local.qgeo,cloud.qgeo),delQ);
+  out.qlocal=strip(_mergeObj(local.qlocal,cloud.qlocal),delQ);
+  out.qnome=strip(_mergeObj(local.qnome,cloud.qnome),delQ);
+  out.locais=strip(_mergeObj(local.locais,cloud.locais),delL);
   out.randomizacoes=_mergeRZLib(local.randomizacoes,cloud.randomizacoes);
   out.georef=local.georef||cloud.georef;
   out.data={};
   var ids={},k; for(k in (cloud.data||{}))ids[k]=1; for(k in (local.data||{}))ids[k]=1;
   Object.keys(ids).forEach(function(qid){
+    if(delQ[qid]) return; /* quadra excluída: não ressuscita pelo merge */
     var lq=(local.data||{})[qid], cq=(cloud.data||{})[qid];
     if(!lq){ out.data[qid]=cq; return; } if(!cq){ out.data[qid]=lq; return; }
     var m={},kk; for(kk in cq)m[kk]=cq[kk]; for(kk in lq)m[kk]=lq[kk];
@@ -2149,31 +2165,34 @@ function cloudSave(){
   if(!cloudInit() || _cloudApplying || !_cloudInitDone) return; /* só escreve depois de ter lido a nuvem */
   cloudBadge('saving');
   var allowShrink=_cloudAllowShrink; _cloudAllowShrink=false;
-  _cloudSaveAttempt(allowShrink, 0);
+  var replace=_cloudReplace; _cloudReplace=false;
+  _cloudSaveAttempt(allowShrink, replace, 0);
 }
 /* Gravação com RETRY (concorrência otimista): relê a nuvem, faz MERGE preservando o local e grava.
    Se o banco RECUSA (revisão já avançou em outro aparelho), RE-TENTA — relê, re-merge e regrava —
-   sem perder o que foi digitado aqui. Só desiste após várias falhas (aí puxa a versão boa). */
-function _cloudSaveAttempt(allowShrink, tries){
+   sem perder o que foi digitado aqui. Só desiste após várias falhas (aí puxa a versão boa).
+   - allowShrink (exclusão de quadra/local): TAMBÉM faz merge (com tombstones); só sinaliza ao banco que pode encolher.
+   - replace (restauração/import): grava o estado como está, sem merge. */
+function _cloudSaveAttempt(allowShrink, replace, tries){
   if(!cloudInit()){ cloudBadge('error'); return; }
   var localState=cloudState();
   try{
     SB.from('app_state').select('state').eq('id',1).single().then(function(res){
       var cs = res && res.data && res.data.state;
       var cRev = (cs && cs.rev!=null) ? cs.rev : 0;
-      var toSave = (allowShrink || !cs) ? localState : cloudMerge(localState, cs);
+      var toSave = (replace || !cs) ? localState : cloudMerge(localState, cs);
       var newRev = (cRev||0)+1; toSave.rev=newRev;
-      if(allowShrink) toSave._allowShrink=true; /* avisa o banco: encolhimento é exclusão intencional */
-      if(!allowShrink && cs){ try{ cloudApply(toSave); }catch(e){} } /* reflete o merge e mantém o local p/ a próxima tentativa */
+      if(allowShrink || replace) toSave._allowShrink=true; /* avisa o banco: encolhimento é intencional */
+      if(cs){ try{ cloudApply(toSave); }catch(e){} } /* reflete o estado a gravar e mantém o local p/ a próxima tentativa */
       SB.from('app_state').update({ state: toSave, updated_at:new Date().toISOString() }).eq('id',1)
         .then(function(r2){
           if(r2 && r2.error){
             /* banco RECUSOU (rev velha/conflito) -> re-tenta do zero (relê+merge+regrava), preservando o local */
-            if(tries<4){ cloudBadge('saving'); setTimeout(function(){ _cloudSaveAttempt(allowShrink, tries+1); }, 250+tries*300); }
+            if(tries<4){ cloudBadge('saving'); setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 250+tries*300); }
             else { cloudBadge('error','— toque p/ tentar'); setTimeout(function(){ try{ cloudPull(); }catch(e){} }, 800); }
           } else { _cloudRev=newRev; cloudBadge('saved'); }
-        }, function(){ if(tries<4){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, tries+1); }, 400+tries*300); } else cloudBadge('error'); });
-    }, function(){ if(tries<3){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, tries+1); }, 500); } else cloudBadge('error'); });
+        }, function(){ if(tries<4){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 400+tries*300); } else cloudBadge('error'); });
+    }, function(){ if(tries<3){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 500); } else cloudBadge('error'); });
   }catch(e){ cloudBadge('error'); }
 }
 function cloudSaveSoon(){ if(_cloudApplying || !_cloudInitDone) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
@@ -5015,7 +5034,7 @@ function safetyApply(snap){
     if(snap.qnome){ QNOME=snap.qnome; if(typeof saveQNome==='function') saveQNome(); }
     if(Array.isArray(snap.randomizacoes)){ RZLIB=normalizeRZLib(snap.randomizacoes); saveRZLib(); }
     if(typeof ensureLocais==='function'){ ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip(); }
-    _cloudAllowShrink=true; /* restauração substitui (pode encolher) -> grava sem merge */
+    _cloudReplace=true; /* restauração substitui o estado (grava sem merge) */
     save(); render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
   }catch(e){ alert('Erro ao restaurar: '+e.message); }
 }
