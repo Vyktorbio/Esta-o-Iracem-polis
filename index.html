@@ -805,10 +805,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Robot
 .loc-mi.on{background:#e4f2ea!important;color:#164f35!important}
 .loc-mi .sub{color:var(--vm-muted-dark)!important}
 
-/* Medição fica alinhada ao novo visual */
-.measure-panel{background:rgba(17,23,21,.94)!important;border-color:rgba(255,255,255,.16)!important;border-radius:12px!important;box-shadow:var(--vm-shadow)!important}
-.measure-kpi{border-color:rgba(255,255,255,.13)!important;background:rgba(255,255,255,.08)!important}
-.measure-actions button{border-radius:8px!important}
+	/* Medição fica alinhada ao novo visual */
+	.measure-panel{background:rgba(17,23,21,.96)!important;border-color:rgba(255,255,255,.16)!important;border-radius:12px!important;box-shadow:var(--vm-shadow)!important;color:#fff!important}
+	.measure-title{color:#7df0b4!important}
+	.measure-x{color:#fff!important}
+	.measure-kpi{border-color:rgba(255,255,255,.16)!important;background:rgba(255,255,255,.09)!important}
+	.measure-kpi b{color:#fff!important}
+	.measure-kpi.main b{color:#7df0b4!important}
+	.measure-kpi span,.measure-note{color:rgba(255,255,255,.78)!important}
+	.measure-actions button{border-radius:8px!important;background:rgba(255,255,255,.10)!important;color:#fff!important;border-color:rgba(255,255,255,.18)!important}
+	.measure-actions button.on{background:#1f8a52!important;color:#fff!important;border-color:#58d891!important}
+	.measure-actions button.danger{background:#7f251f!important;color:#fff!important;border-color:#c44a40!important}
 
 @media (max-width:700px){
   .top-bar{align-items:stretch!important;padding:8px 10px!important;gap:8px!important}
