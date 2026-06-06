@@ -312,7 +312,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 </style>
 <link rel="stylesheet" href="vendor/leaflet.css">
 <link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#ffffff">
+<meta name="theme-color" content="#101513">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -580,10 +580,12 @@ html,body{background:var(--bg)} body{color:var(--text)}
 .search-item-id{color:var(--accent-d)} .search-item-tag{background:#eef1ef;color:var(--text-2)} .search-item-sub{color:var(--text-2)} .search-item-meta,.search-empty{color:var(--text-3)}
 
 /* Login (CSS injetado por JS -> precisa de !important) */
-.auth-gate{background:radial-gradient(120% 80% at 50% 0%,#fbfdfc,#e7ebe9)!important}
-.auth-box{background:#fff!important;border-color:var(--border)!important}
-.auth-title{color:#16201b!important} .auth-sub,.auth-foot{color:var(--text-3)!important} .auth-l{color:var(--text-2)!important}
-.auth-i{background:#fff!important;color:var(--text)!important;border-color:var(--border)!important}
+.auth-gate{background:radial-gradient(110% 80% at 50% 0%,#24342c,#101513 52%,#090d0b)!important}
+.auth-box{background:rgba(246,247,244,.96)!important;border-color:rgba(255,255,255,.32)!important;box-shadow:0 30px 90px rgba(0,0,0,.42)!important}
+.auth-logo{color:#1c7f51!important;letter-spacing:1.2px!important}
+.auth-title{color:#16201b!important} .auth-sub,.auth-foot{color:#6c7770!important} .auth-l{color:#59665f!important}
+.auth-i{background:#fff!important;color:#18211d!important;border-color:#d8ded8!important}
+.auth-i:focus{border-color:rgba(33,168,107,.65)!important;box-shadow:0 0 0 3px rgba(33,168,107,.12)!important}
 .auth-i::placeholder{color:#9aa49e}
 /* Tela cheia (só o mapa) */
 body.map-full .top-bar,body.map-full .toolbar-extra,body.map-full .leaflet-control-container,body.map-full #cloudBadge{display:none!important}
@@ -598,6 +600,227 @@ body.map-full .top-bar,body.map-full .toolbar-extra,body.map-full .leaflet-contr
 .loc-modal{background:rgba(40,52,46,.5)!important} .loc-box{background:#fff!important;color:var(--text)!important} .loc-ri{border-color:var(--border)!important;color:var(--text)!important} .loc-ri:hover{background:#eef3f0!important}
 .loc-chip{background:#fff!important;border-color:var(--border)!important} .loc-chip b{color:#16201b!important} .loc-box h3{color:var(--accent-d)!important}
 .rot-ctl button{background:rgba(255,255,255,.95)!important;color:#28312c!important;border-color:var(--border)!important} .rot-ctl button:hover{color:var(--accent-d)!important}
+</style>
+<style id="fieldConsoleTheme">
+/* ===================== TEMA VMap Campo - console operacional ===================== */
+:root{
+  --vm-bg:#0c1110;
+  --vm-glass:rgba(15,20,18,.88);
+  --vm-glass-strong:rgba(17,23,21,.95);
+  --vm-panel:#f6f7f4;
+  --vm-panel-2:#eef1ed;
+  --vm-line:rgba(214,222,216,.22);
+  --vm-line-dark:#d8ded8;
+  --vm-text:#f3f7f4;
+  --vm-text-dark:#18211d;
+  --vm-muted:#a9b7ae;
+  --vm-muted-dark:#627069;
+  --vm-accent:#21a86b;
+  --vm-accent-2:#2f85c9;
+  --vm-warn:#d69431;
+  --vm-danger:#d75a4e;
+  --vm-shadow:0 12px 34px rgba(0,0,0,.28);
+  --vm-shadow-soft:0 8px 20px rgba(19,31,25,.16);
+}
+html,body{background:var(--vm-bg)!important}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Arial,sans-serif!important;color:var(--vm-text-dark);letter-spacing:0!important}
+
+/* Header compacto, com cara de ferramenta de campo */
+.top-bar{
+  min-height:58px!important;
+  padding:8px 14px!important;
+  background:linear-gradient(180deg,rgba(14,19,17,.94),rgba(12,17,15,.9))!important;
+  border-bottom:1px solid rgba(255,255,255,.1)!important;
+  box-shadow:0 10px 26px rgba(0,0,0,.24)!important;
+  backdrop-filter:blur(18px)!important;
+  -webkit-backdrop-filter:blur(18px)!important;
+  gap:12px!important;
+}
+.top-bar>div:first-child{display:flex;align-items:center;gap:10px;min-width:0}
+.top-bar h1{display:flex;align-items:center;gap:9px;color:#f7fbf8!important;font-size:16px!important;font-weight:850!important;letter-spacing:.1px!important;line-height:1!important;white-space:nowrap}
+.top-bar h1:before{content:"";width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,var(--vm-accent),var(--vm-accent-2));box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),0 5px 14px rgba(33,168,107,.26)}
+.top-bar-right{gap:8px!important;align-items:center!important}
+.top-bar-info{height:30px;display:inline-flex;align-items:center;color:#c4cdc7!important;font-size:11px!important;font-weight:650!important;padding:0 8px;border-left:1px solid rgba(255,255,255,.11);margin-right:0!important}
+
+.btn-sm{
+  height:32px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:6px!important;
+  padding:0 11px!important;
+  border-radius:8px!important;
+  border:1px solid rgba(255,255,255,.14)!important;
+  background:rgba(255,255,255,.07)!important;
+  color:#d8e0db!important;
+  box-shadow:none!important;
+  font-size:11px!important;
+  font-weight:760!important;
+  letter-spacing:.28px!important;
+  text-transform:uppercase!important;
+}
+.btn-sm:hover{background:rgba(255,255,255,.12)!important;border-color:rgba(255,255,255,.22)!important;color:#fff!important}
+.btn-sm.active{background:rgba(33,168,107,.18)!important;border-color:rgba(33,168,107,.45)!important;color:#dff8eb!important}
+.btn-search{width:34px!important;padding:0!important;font-size:0!important}
+.btn-search:before{content:"⌕";font-size:19px;line-height:1;color:#dce6df}
+.today-badge{height:18px;min-width:20px;display:inline-flex!important;align-items:center;justify-content:center;border-radius:999px!important;background:#dfe8e2!important;color:#15211b!important;font-size:10px!important;font-weight:850!important;padding:0 6px!important}
+.btn-today.has-urgent,.btn-today.has-today{color:#fff!important}
+
+/* Local atual */
+.loc-chip{
+  height:32px!important;
+  margin:0 0 0 2px!important;
+  padding:0 10px!important;
+  gap:7px!important;
+  border-radius:8px!important;
+  background:rgba(255,255,255,.07)!important;
+  border:1px solid rgba(255,255,255,.14)!important;
+  color:#d8e0db!important;
+  max-width:min(48vw,360px)!important;
+  box-shadow:none!important;
+}
+.loc-chip:hover{background:rgba(255,255,255,.12)!important;border-color:rgba(255,255,255,.22)!important}
+.loc-chip b{color:#fff!important;font-weight:780!important;max-width:min(30vw,220px)!important}
+.loc-chip .sub,.loc-chip .car{color:#b2beb7!important}
+.loc-pin{display:inline-flex;align-items:center;justify-content:center;height:18px;min-width:28px;border-radius:5px;background:rgba(33,168,107,.18);color:#dff8eb;font-size:9px;font-weight:850;letter-spacing:.45px}
+
+/* Mapa e controles */
+#map,.leaflet-container{background:#0e1411!important}
+.leaflet-bar{border:0!important;border-radius:10px!important;box-shadow:var(--vm-shadow)!important;overflow:hidden!important}
+.leaflet-bar a{width:36px!important;height:36px!important;line-height:36px!important;background:rgba(246,247,244,.94)!important;color:#18211d!important;border-bottom:1px solid #dde3dd!important;font-weight:800!important;backdrop-filter:blur(14px)!important}
+.leaflet-bar a:hover{background:#fff!important;color:var(--vm-accent)!important}
+.leaflet-control-scale-line{height:auto!important;background:rgba(246,247,244,.9)!important;color:#18211d!important;border:1px solid rgba(24,33,29,.22)!important;border-top:0!important;border-radius:0 0 6px 6px!important;font-weight:750!important}
+.leaflet-control-attribution{background:rgba(246,247,244,.74)!important;color:#68736d!important;border-radius:8px 0 0 0!important}
+
+/* Dock inferior */
+.toolbar-extra{
+  right:14px!important;
+  bottom:14px!important;
+  gap:8px!important;
+  padding:7px!important;
+  border-radius:14px!important;
+  background:rgba(13,18,16,.78)!important;
+  border:1px solid rgba(255,255,255,.14)!important;
+  box-shadow:var(--vm-shadow)!important;
+  backdrop-filter:blur(18px)!important;
+  -webkit-backdrop-filter:blur(18px)!important;
+}
+.toolbar-extra button{
+  min-width:72px!important;
+  height:42px!important;
+  padding:0 12px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:7px!important;
+  border-radius:10px!important;
+  border:1px solid rgba(255,255,255,.13)!important;
+  background:rgba(255,255,255,.08)!important;
+  color:#eef4f0!important;
+  box-shadow:none!important;
+  font-size:12px!important;
+  font-weight:780!important;
+  letter-spacing:.15px!important;
+}
+.toolbar-extra button:hover{background:rgba(255,255,255,.14)!important;border-color:rgba(255,255,255,.22)!important}
+.tool-ico{height:22px;min-width:24px;padding:0 5px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,.11);color:#fff;font-size:10px;font-weight:850;letter-spacing:.2px}
+.tool-ndvi .tool-ico{background:rgba(33,168,107,.22);color:#dbfae8}
+.tool-clima .tool-ico{background:rgba(47,133,201,.24);color:#e0f0ff}
+.tool-measure .tool-ico{background:rgba(214,148,49,.24);color:#fff0d5}
+.tool-gps .tool-ico{background:rgba(215,90,78,.22);color:#ffe2df}
+
+/* Superfícies e modais */
+.panel,.edit-panel,.se-panel,.ndvi-panel,.gr-panel,.agenda-panel,.legend-panel,.main-menu,.loc-menu,.loc-box{
+  background:var(--vm-panel)!important;
+  color:var(--vm-text-dark)!important;
+  border:1px solid var(--vm-line-dark)!important;
+  border-radius:12px!important;
+  box-shadow:var(--vm-shadow-soft)!important;
+}
+.overlay,.search-overlay,.se-overlay,.loc-modal,.ndvi-modal{background:rgba(13,18,16,.54)!important;backdrop-filter:blur(8px)!important;-webkit-backdrop-filter:blur(8px)!important}
+.panel-header{background:linear-gradient(180deg,#fff,#f4f6f2);border-bottom:1px solid var(--vm-line-dark)!important;border-radius:12px 12px 0 0}
+.panel-qid,.edit-id,.sd-codigo,.today-title{color:#17211c!important}
+.panel-qlbl,.edit-title,.studies-title,.sd-section-title,.se-section-title,.gr-title,.ag-title{color:var(--vm-accent)!important;letter-spacing:.75px!important}
+.info-l,.prog-t,.prog-p,.fen-title,.sd-meta-lbl,.se-field label,.ag-group-title{color:var(--vm-muted-dark)!important}
+.info-v,.study-name,.evento-data,.evento-subtipo,.evento-obs{color:var(--vm-text-dark)!important}
+
+.study-card,.study-card-v2,.sd-meta,.today-card,.today-sum-item,.trat-table,.evento-item,.se-trat,.ag-item,.fen-item,.search-item{
+  background:#fff!important;
+  border:1px solid var(--vm-line-dark)!important;
+  border-radius:10px!important;
+  box-shadow:0 1px 0 rgba(255,255,255,.6)!important;
+}
+.study-card-v2:hover,.search-item:hover,.ag-item:hover{border-color:#b9c8bf!important;background:#fbfcfa!important}
+.study-card-v2-codigo,.trat-id,.today-card-estudo,.search-item-id{color:#14231b!important;font-weight:820!important}
+.study-card-v2-desc,.study-card-v2-meta,.study-meta,.search-item-sub,.search-item-meta{color:var(--vm-muted-dark)!important}
+
+/* Botões internos */
+.studies-add,.sd-add,.se-add-trat,.eval-add-btn,.btn-save,.today-card-quick,.gr-ok,.e-save,.p-btn-edit{
+  background:linear-gradient(180deg,#239b64,#1c7f51)!important;
+  color:#fff!important;
+  border:1px solid #197448!important;
+  border-radius:9px!important;
+  font-weight:780!important;
+  box-shadow:0 6px 14px rgba(28,127,81,.18)!important;
+}
+.btn-cancel,.e-cancel,.gr-cancel,.p-btn-close,.today-back,.sd-back{
+  background:#eef1ed!important;
+  color:#334039!important;
+  border:1px solid var(--vm-line-dark)!important;
+  border-radius:9px!important;
+}
+.btn-danger,.measure-actions button.danger{background:#fff1ef!important;color:#b53d33!important;border-color:#e1a39c!important}
+
+/* Telas cheias */
+.today-overlay,.sd-overlay{background:#eef1ed!important;color:var(--vm-text-dark)!important}
+.today-head,.sd-header{background:rgba(238,241,237,.94)!important;border-bottom:1px solid var(--vm-line-dark)!important;backdrop-filter:blur(16px)!important;-webkit-backdrop-filter:blur(16px)!important}
+.sd-descricao,.sd-empty,.today-empty,.se-empty{background:#fff!important;border-color:var(--vm-line-dark)!important;color:var(--vm-muted-dark)!important}
+.trat-head{background:#edf2ee!important;color:var(--vm-muted-dark)!important}
+.trat-row{border-top-color:var(--vm-line-dark)!important}
+
+/* Busca */
+.search-box input,.se-field input,.se-field select,.se-field textarea,.e-inp,.loc-box input{
+  background:#fff!important;
+  color:var(--vm-text-dark)!important;
+  border:1px solid var(--vm-line-dark)!important;
+  border-radius:9px!important;
+}
+.search-box input:focus,.se-field input:focus,.se-field select:focus,.se-field textarea:focus,.e-inp:focus,.loc-box input:focus{border-color:rgba(33,168,107,.65)!important;box-shadow:0 0 0 3px rgba(33,168,107,.12)!important}
+.search-close{background:#fff!important;border:1px solid var(--vm-line-dark)!important;color:#59665f!important;border-radius:9px!important}
+
+/* Sincronização */
+.cloud-badge{
+  bottom:72px!important;
+  background:rgba(246,247,244,.92)!important;
+  color:#334039!important;
+  border:1px solid rgba(24,33,29,.14)!important;
+  box-shadow:var(--vm-shadow-soft)!important;
+  font-weight:760!important;
+}
+.cb-saving{color:#177a4c!important}.cb-error{color:var(--vm-danger)!important}.cb-offline{color:#86621b!important}
+
+/* Menus injetados */
+.main-menu button,.loc-mi{color:#26312b!important}
+.main-menu button:hover,.loc-mi:hover{background:#edf2ee!important}
+.loc-mi.on{background:#e4f2ea!important;color:#164f35!important}
+.loc-mi .sub{color:var(--vm-muted-dark)!important}
+
+/* Medição fica alinhada ao novo visual */
+.measure-panel{background:rgba(17,23,21,.94)!important;border-color:rgba(255,255,255,.16)!important;border-radius:12px!important;box-shadow:var(--vm-shadow)!important}
+.measure-kpi{border-color:rgba(255,255,255,.13)!important;background:rgba(255,255,255,.08)!important}
+.measure-actions button{border-radius:8px!important}
+
+@media (max-width:700px){
+  .top-bar{align-items:stretch!important;padding:8px 10px!important;gap:8px!important}
+  .top-bar>div:first-child{justify-content:space-between}
+  .top-bar-right{justify-content:flex-start!important;overflow-x:auto!important;flex-wrap:nowrap!important;padding-bottom:1px}
+  .top-bar-info{display:none!important}
+  .loc-chip{max-width:56vw!important}
+  .toolbar-extra{left:10px!important;right:10px!important;bottom:10px!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  .toolbar-extra button{min-width:0!important;height:44px!important;padding:0 6px!important;font-size:11px!important}
+  .tool-ico{display:none}
+  .panel,.edit-panel,.se-panel{max-width:calc(100vw - 18px)!important}
+}
 </style>
 </head>
 <body>
@@ -632,10 +855,10 @@ body.map-full .top-bar,body.map-full .toolbar-extra,body.map-full .leaflet-contr
 
 <!-- Toolbar de backup -->
 <div class="toolbar-extra">
-<button onclick="toggleNdvi()" title="Camadas NDVI / NDRE / GNDVI (Sentinel-2)">🛰️ NDVI</button>
-<button onclick="toggleClima()" title="Clima ao vivo da estação meteorológica (Ecowitt)">🌦️ Clima</button>
-<button onclick="toggleMeasure()" title="Medir área no mapa ou com o GPS">📏 Medir</button>
-<button onclick="locateMe()" title="Mostrar minha localização (GPS)">📍 GPS</button>
+<button class="tool-ndvi" onclick="toggleNdvi()" title="Camadas NDVI / NDRE / GNDVI (Sentinel-2)"><span class="tool-ico">ND</span><span>NDVI</span></button>
+<button class="tool-clima" onclick="toggleClima()" title="Clima ao vivo da estação meteorológica (Ecowitt)"><span class="tool-ico">WX</span><span>Clima</span></button>
+<button class="tool-measure" onclick="toggleMeasure()" title="Medir área no mapa ou com o GPS"><span class="tool-ico">m²</span><span>Medir</span></button>
+<button class="tool-gps" onclick="locateMe()" title="Mostrar minha localização (GPS)"><span class="tool-ico">GPS</span><span>GPS</span></button>
 <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">
 </div>
 
@@ -1540,7 +1763,7 @@ function buildLocalChip(){
   if(!chip){ chip=document.createElement('div'); chip.id='localChip'; chip.className='loc-chip'; chip.onclick=toggleLocalMenu; host.appendChild(chip); }
   var nome=(LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'—';
   var n=quadrasDoLocal(localAtivo).length;
-  chip.innerHTML='📍 <b>'+esc(nome)+'</b> <span class="sub">'+n+' quadra'+(n===1?'':'s')+'</span> <span class="car">▾</span>';
+  chip.innerHTML='<span class="loc-pin">LOC</span><b>'+esc(nome)+'</b> <span class="sub">'+n+' quadra'+(n===1?'':'s')+'</span> <span class="car">▾</span>';
 }
 function closeLocalMenu(){ var m=document.getElementById('localMenu'); if(m) m.remove(); document.removeEventListener('click', _locMenuOutside, true); }
 function _locMenuOutside(e){ var m=document.getElementById('localMenu'), c=document.getElementById('localChip'); if(m && !m.contains(e.target) && c && !c.contains(e.target)) closeLocalMenu(); }
@@ -2006,14 +2229,14 @@ function traduzAuthErro(m){ m=String(m||'');
   if(/network|fetch|Failed/i.test(m)) return 'Sem conexão com o servidor. Tente de novo.';
   return m; }
 function _authCss(){ if(document.getElementById('authCss'))return; var s=document.createElement('style'); s.id='authCss';
-  s.textContent='.auth-gate{position:fixed;inset:0;z-index:3000;background:radial-gradient(120% 80% at 50% 0%,#0f1713,#070a08);display:none;align-items:center;justify-content:center;padding:20px}.auth-gate.on{display:flex}'+
-  '.auth-box{width:100%;max-width:360px;background:var(--surface,#101613);border:1px solid var(--border,#26322b);border-radius:18px;box-shadow:0 24px 70px rgba(0,0,0,.6);padding:26px 22px;font-family:var(--font,system-ui)}'+
-  '.auth-logo{font-size:9px;letter-spacing:3px;color:var(--accent,#37d684);font-weight:700;text-align:center}'+
-  '.auth-title{font-size:19px;font-weight:800;color:#f2f7f3;text-align:center;margin:3px 0}'+
-  '.auth-sub{font-size:12px;color:var(--text-3,#6d7f73);text-align:center;margin-bottom:16px}'+
-  '.auth-l{display:block;font-size:10px;letter-spacing:1px;color:var(--text-2,#9fb1a5);font-weight:700;margin:12px 0 4px}'+
-  '.auth-i{width:100%;box-sizing:border-box;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:10px;color:#eaf0ea;padding:12px;font-size:15px;outline:none}'+
-  '.auth-i:focus{border-color:var(--accent-d,#1f8a52)}'+
+  s.textContent='.auth-gate{position:fixed;inset:0;z-index:3000;background:radial-gradient(110% 80% at 50% 0%,#24342c,#101513 52%,#090d0b);display:none;align-items:center;justify-content:center;padding:20px}.auth-gate.on{display:flex}'+
+  '.auth-box{width:100%;max-width:372px;background:rgba(246,247,244,.96);border:1px solid rgba(255,255,255,.32);border-radius:16px;box-shadow:0 30px 90px rgba(0,0,0,.42);padding:28px 24px;font-family:var(--font,system-ui)}'+
+  '.auth-logo{font-size:11px;letter-spacing:1.2px;color:#1c7f51;font-weight:850;text-align:center;text-transform:uppercase}'+
+  '.auth-title{font-size:22px;font-weight:850;color:#16201b;text-align:center;margin:5px 0 2px}'+
+  '.auth-sub{font-size:12px;color:#6c7770;text-align:center;margin-bottom:18px}'+
+  '.auth-l{display:block;font-size:10px;letter-spacing:.8px;color:#59665f;font-weight:800;margin:13px 0 5px;text-transform:uppercase}'+
+  '.auth-i{width:100%;box-sizing:border-box;background:#fff;border:1px solid #d8ded8;border-radius:10px;color:#18211d;padding:12px;font-size:15px;outline:none}'+
+  '.auth-i:focus{border-color:rgba(33,168,107,.65);box-shadow:0 0 0 3px rgba(33,168,107,.12)}'+
   '.auth-btn{width:100%;margin-top:18px;border:none;border-radius:11px;padding:13px;font-size:15px;font-weight:800;cursor:pointer;background:linear-gradient(180deg,#1f9a5d,#178048);color:#eafff2}'+
   '.auth-btn:disabled{opacity:.6;cursor:default}'+
   '.auth-err{display:none;margin-top:12px;background:rgba(255,107,107,.12);border:1px solid #7a2b22;color:#ffb3a8;font-size:12px;padding:9px 11px;border-radius:9px;text-align:center}'+
@@ -2024,9 +2247,9 @@ function buildAuthGate(){
   var g=document.getElementById('authGate');
   if(!g){ g=document.createElement('div'); g.id='authGate'; g.className='auth-gate'; document.body.appendChild(g); }
   g.innerHTML='<form class="auth-box" onsubmit="return false">'+
-    '<div class="auth-logo">IMAGEAMENTO MULTIESPECTRAL</div>'+
+    '<div class="auth-logo">VMap Campo</div>'+
     '<div class="auth-title">Entrar</div>'+
-    '<div class="auth-sub">Acesso restrito · use sua conta</div>'+
+    '<div class="auth-sub">Acesso restrito</div>'+
     '<label class="auth-l">E-MAIL</label><input id="authEmail" class="auth-i" type="email" autocomplete="username" inputmode="email" placeholder="voce@exemplo.com">'+
     '<label class="auth-l">SENHA</label><input id="authPass" class="auth-i" type="password" autocomplete="current-password" placeholder="••••••••">'+
     '<div id="authErr" class="auth-err"></div>'+
