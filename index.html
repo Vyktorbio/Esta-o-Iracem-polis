@@ -2003,6 +2003,7 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();exportData()">'+ic('save')+' Backup (arquivo)</button>'+
     '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">'+ic('download')+' Importar</button>'+
     '<button onclick="closeMainMenu();openBackups()">'+ic('archive')+' Backups (restaurar)</button>'+
+    '<button onclick="closeMainMenu();openIntegridade()">'+ic('search')+' Verificar integridade</button>'+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
   document.body.appendChild(m);
   /* abre logo abaixo do botão ☰ (canto superior direito) */
@@ -2130,12 +2131,12 @@ function cloudState(){ ensureQGEO(); ensureLocais(); return { data:data, qgeo:QG
 function cloudBadge(kind,txt){
   if(!document.getElementById('cloudBadgeCss')){
     var s=document.createElement('style'); s.id='cloudBadgeCss';
-    s.textContent='.cloud-badge{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:900;font:600 11px/1 -apple-system,system-ui,sans-serif;letter-spacing:.3px;padding:6px 13px;border-radius:999px;color:#cfe0d4;background:rgba(15,21,18,.9);border:1px solid #26322b;box-shadow:0 6px 22px rgba(0,0,0,.46);cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:opacity .5s;user-select:none}.cb-saved{opacity:.45}.cb-saving{color:#bff3d4}.cb-error{color:#ffb3a8;border-color:#7a2b22;opacity:1}.cb-offline{color:#dccd8c;border-color:#5a4d1f;opacity:1}';
+    s.textContent='.cloud-badge{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:900;font:600 11px/1 -apple-system,system-ui,sans-serif;letter-spacing:.3px;padding:6px 13px;border-radius:999px;color:#cfe0d4;background:rgba(15,21,18,.9);border:1px solid #26322b;box-shadow:0 6px 22px rgba(0,0,0,.46);cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:opacity .5s;user-select:none}.cb-saved{opacity:.62}.cb-saving{color:#bff3d4}.cb-error{color:#ffb3a8;border-color:#7a2b22;opacity:1}.cb-offline{color:#dccd8c;border-color:#5a4d1f;opacity:1}';
     document.head.appendChild(s);
   }
   var el=document.getElementById('cloudBadge');
   if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Sincronização com a nuvem (toque para atualizar)'; el.onclick=function(){ cloudResync(); }; document.body.appendChild(el); }
-  var L={saving:'⟳ salvando…', saved:'☁︎ salvo', error:'⚠︎ erro — toque p/ tentar', offline:'⌁ sem conexão', idle:'☁︎'};
+  var L={saving:'⟳ enviando p/ nuvem…', saved:'☁︎ salvo na nuvem', error:'⚠︎ no aparelho · não subiu — toque', offline:'⌁ salvo no aparelho · sem internet', idle:'☁︎'};
   el.className='cloud-badge cb-'+(kind||'idle');
   el.textContent=(L[kind||'idle']||L.idle)+(txt?(' '+txt):'');
 }
@@ -5273,6 +5274,49 @@ function safetyApply(snap){
     save(); render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
   }catch(e){ alert('Erro ao restaurar: '+e.message); }
 }
+/* ===================== VERIFICADOR DE INTEGRIDADE ===================== */
+function integridadeScan(){
+  var out=[];
+  try{
+    try{ ensureLocais(); }catch(e){}
+    var locIds={}; Object.keys(LOCAIS||{}).forEach(function(l){ locIds[l]=1; });
+    Object.keys(QLOCAL||{}).forEach(function(qid){ var l=QLOCAL[qid]; if(l && !locIds[l] && (data[qid]||(QGEO&&QGEO[qid]))) out.push({sev:'media',msg:'Quadra “'+quadraNome(qid)+'” aponta para um local que não existe mais.'}); });
+    Object.keys(data||{}).forEach(function(qid){
+      var q=data[qid]; if(!q) return;
+      if(QGEO && !QGEO[qid] && q.estudos && q.estudos.length) out.push({sev:'baixa',msg:'Quadra “'+quadraNome(qid)+'” tem estudo mas não tem polígono no mapa.'});
+      (q.estudos||[]).forEach(function(s){
+        if(!s) return; var cod=s.codigo||'(sem código)', loc=quadraNome(qid);
+        var tids={}; (s.tratamentos||[]).forEach(function(t){ if(t&&t.id) tids[t.id]=1; });
+        var nTrat=(s.tratamentos||[]).length, nAval=(s.avaliacoes||[]).length;
+        if(!nTrat && nAval) out.push({sev:'alta',msg:'Estudo “'+cod+'” ('+loc+') tem avaliação mas nenhum tratamento cadastrado.'});
+        if(s.testemunha && nTrat && !tids[s.testemunha]) out.push({sev:'media',msg:'Estudo “'+cod+'” ('+loc+'): a testemunha definida (“'+s.testemunha+'”) não está entre os tratamentos.'});
+        var orf={};
+        (s.avaliacoes||[]).forEach(function(a){
+          if(!a) return;
+          if(a.data && isNaN(new Date(a.data).getTime())) out.push({sev:'media',msg:'Estudo “'+cod+'” ('+loc+'): avaliação com data inválida.'});
+          if(nTrat) Object.keys(a.notas||{}).forEach(function(k){ var tid=String(k).replace(/R\d+$/,''); if(tid && !tids[tid] && !orf[tid]){ orf[tid]=1; out.push({sev:'media',msg:'Estudo “'+cod+'” ('+loc+'): há notas de um tratamento (“'+tid+'”) que não está mais na lista — o dado pode ficar invisível.'}); } });
+        });
+      });
+    });
+  }catch(e){ out.push({sev:'baixa',msg:'A verificação não pôde ser concluída: '+(e&&e.message||e)}); }
+  return out;
+}
+function _integToast(){ try{ var ig=integridadeScan(); if(ig.length){ var alta=ig.filter(function(x){return x.sev==='alta';}).length; _stxToast((alta?'⚠ ':'')+ig.length+' aviso'+(ig.length>1?'s':'')+' de integridade — veja no menu'); } }catch(e){} }
+function openIntegridade(){
+  var ig=integridadeScan();
+  var sevcor={alta:'#ffb3a8',media:'#dccd8c',baixa:'#9ac49a'}, sevlab={alta:'CRÍTICO',media:'ATENÇÃO',baixa:'INFO'};
+  var m=document.getElementById('integModal');
+  if(!m){ m=document.createElement('div'); m.id='integModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
+  var body = ig.length ? ig.map(function(x){ return '<div style="border:1px solid #2a3a2a;border-left:3px solid '+(sevcor[x.sev]||'#888')+';border-radius:8px;padding:9px 11px;margin-top:7px"><div style="font-size:10px;font-weight:800;letter-spacing:.4px;color:'+(sevcor[x.sev]||'#888')+'">'+(sevlab[x.sev]||'')+'</div><div style="font-size:13px;color:#eaf3ed;margin-top:2px">'+esc(x.msg)+'</div></div>'; }).join('')
+    : '<div style="text-align:center;color:#9ac49a;font-size:14px;margin:18px 0"><div style="font-size:30px;line-height:1">✓</div>Tudo certo — nenhuma inconsistência encontrada.</div>';
+  m.innerHTML='<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">Verificação de integridade</b><button onclick="document.getElementById(\'integModal\').style.display=\'none\'" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Confere estudos, tratamentos, testemunha e vínculos. Não altera nada — só aponta o que revisar.'+(ig.length?(' <b style="color:#dccd8c">'+ig.length+' aviso(s).</b>'):'')+'</div>'+
+    body+
+    '<div style="margin-top:12px"><button onclick="document.getElementById(\'integModal\').style.display=\'none\'" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar</button></div>'+
+  '</div>';
+  m.style.display='flex';
+}
 function openBackups(){
   var m=document.getElementById('bkpModal');
   if(!m){ m=document.createElement('div'); m.id='bkpModal'; m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
@@ -5825,6 +5869,7 @@ function init(){
   ensureLocais(); buildLocalChip(); try{ flyToLocal(localAtivo); }catch(e){}
   try{ safetyBackup('ao abrir'); }catch(e){}
   if(typeof authInit==='function') authInit(); else if(typeof cloudStart==='function') cloudStart();
+  setTimeout(function(){ try{ _integToast(); }catch(e){} }, 4000);
   }catch(e){
     var b=document.createElement('div');
     b.style.cssText='position:fixed;top:50px;left:8px;right:8px;background:#300;color:#fff;padding:10px;z-index:9999;font:12px monospace;border:1px solid #f55;border-radius:6px;white-space:pre-wrap';
