@@ -3209,7 +3209,8 @@ function resizeImage(base64, maxWidth, maxHeight, quality, callback){
 
 function saveNoteForm(event){
   if(event) event.preventDefault();
-  
+  if(!_currentNoteCoords){ alert('Local da observação não definido — toque no mapa ou use "Usar GPS" e tente de novo.'); return; }
+
   var title=document.getElementById('noteTitle').value.trim();
   var category=document.getElementById('noteCategory').value;
   var severity=document.getElementById('noteSeverity').value;
