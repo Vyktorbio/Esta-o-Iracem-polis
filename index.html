@@ -320,7 +320,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=27').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=28').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -2458,7 +2458,13 @@ function cloudMerge(local,cloud){
     var lq=(local.data||{})[qid], cq=(cloud.data||{})[qid];
     if(!lq){ out.data[qid]=cq; return; } if(!cq){ out.data[qid]=lq; return; }
     if(qid === '__config'){
-      out.data[qid] = _mergeObj(cq, lq);
+      var isAdmin = false;
+      var email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : null;
+      var admEmail = (cq && cq.adminEmail) || 'machadovictorchaves@gmail.com';
+      if(email && (email.toLowerCase().trim() === admEmail.toLowerCase().trim() || email.toLowerCase().trim() === 'machadovictorchaves@gmail.com')){
+        isAdmin = true;
+      }
+      out.data[qid] = isAdmin ? _mergeObj(lq, cq) : _mergeObj(cq, lq);
       return;
     }
     var m={},kk; for(kk in cq)m[kk]=cq[kk]; for(kk in lq)m[kk]=lq[kk];
