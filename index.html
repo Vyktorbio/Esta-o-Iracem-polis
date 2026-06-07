@@ -691,6 +691,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Robot
 .leaflet-bar a:hover{background:#fff!important;color:var(--vm-accent)!important}
 .leaflet-control-scale-line{height:auto!important;background:rgba(246,247,244,.9)!important;color:#18211d!important;border:1px solid rgba(24,33,29,.22)!important;border-top:0!important;border-radius:0 0 6px 6px!important;font-weight:750!important}
 .leaflet-control-attribution{background:rgba(246,247,244,.74)!important;color:#68736d!important;border-radius:8px 0 0 0!important}
+.leaflet-control-layers{border:0!important;border-radius:10px!important;box-shadow:var(--vm-shadow)!important;background:rgba(246,247,244,.96)!important;color:#18211d!important;overflow:hidden!important}
+.leaflet-control-layers-toggle{width:36px!important;height:36px!important;background-color:rgba(246,247,244,.94)!important;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2318211d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 2 7 12 12 22 7 12 2'/><polyline points='2 17 12 22 22 17'/><polyline points='2 12 12 17 22 12'/></svg>")!important;background-size:20px 20px!important;background-position:center!important;background-repeat:no-repeat!important;border-radius:10px!important}
+.leaflet-control-layers-expanded{padding:8px 10px!important;font:600 13px var(--font,system-ui)!important;color:#18211d!important}
+.leaflet-control-layers-base label{display:flex;align-items:center;gap:7px;padding:4px 2px;cursor:pointer;white-space:nowrap}
+.leaflet-control-layers-selector{margin:0!important;accent-color:#21a86b}
 
 /* Dock inferior */
 .toolbar-extra{
@@ -1191,7 +1196,7 @@ var NS="http://www.w3.org/2000/svg";
 var IMG_W=1280, IMG_H=889;
 var GEOREF_KEY="iracema-georef-v1";
 var ESTACAO_CENTER=[-22.65804,-47.52112], ESTACAO_ZOOM=16; /* Plantec Laboratórios, SP-147 km 128 */
-var SAT_MAX_ZOOM=19; /* Esri/Maxar entrega imagem nativa até z19; acima disso só estica pixel. */
+var SAT_MAX_ZOOM=21; /* Google chega a ~z21; Esri estica além de z19. */
 var _map=null, _qLayer=null, _baseSat=null, _geo=null;
 var _grOverlay=null, _grHandles=null, _grOn=false;
 
@@ -1230,8 +1235,14 @@ function initMap(){
   if(_map) return;
   _map = LF.map('map', { center:ESTACAO_CENTER, zoom:ESTACAO_ZOOM, zoomControl:true, maxZoom:SAT_MAX_ZOOM, rotate:true, touchRotate:true, rotateControl:false, bearing:0,
     zoomSnap:0, zoomDelta:0.4, wheelDebounceTime:18, wheelPxPerZoomLevel:110, zoomAnimation:true });
-  _baseSat = LF.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    { maxZoom:SAT_MAX_ZOOM, maxNativeZoom:SAT_MAX_ZOOM, attribution:'Imagery \u00a9 Esri, Maxar, Earthstar Geographics' }).addTo(_map);
+  var _gsub=['mt0','mt1','mt2','mt3'];
+  var _bases={
+    'Sat\u00e9lite (Google)': LF.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { subdomains:_gsub, maxZoom:SAT_MAX_ZOOM, maxNativeZoom:20, attribution:'\u00a9 Google' }),
+    'H\u00edbrido (Google)':  LF.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains:_gsub, maxZoom:SAT_MAX_ZOOM, maxNativeZoom:20, attribution:'\u00a9 Google' }),
+    'Sat\u00e9lite (Esri)':   LF.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom:SAT_MAX_ZOOM, maxNativeZoom:19, attribution:'\u00a9 Esri, Maxar' })
+  };
+  _baseSat=_bases['Sat\u00e9lite (Google)']; _baseSat.addTo(_map);
+  try{ LF.control.layers(_bases, null, { position:'topleft', collapsed:true }).addTo(_map); }catch(e){}
   _qLayer = LF.layerGroup().addTo(_map);
   _map.attributionControl.setPrefix('');
   try{ LF.control.scale({ metric:true, imperial:false, maxWidth:150, position:'bottomleft' }).addTo(_map); }catch(e){}
@@ -1802,7 +1813,9 @@ function gerenciarLocais(){
   if(!m){ m=document.createElement('div'); m.id='locManage'; m.className='loc-modal'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
   var rows=Object.keys(LOCAIS).map(function(id){ var Lc=LOCAIS[id], n=quadrasDoLocal(id).length;
     return '<div class="lm-row"><div class="lm-info"><b>'+esc(Lc.nome)+'</b><span>'+n+' quadra'+(n===1?'':'s')+'</span></div>'+
-      '<button class="lm-del" onclick="excluirLocal(\''+id+'\')">Excluir</button></div>';
+      '<div class="lm-acts" style="display:flex;gap:6px">'+
+      '<button class="lm-ren" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:8px;padding:7px 11px;font-weight:700;cursor:pointer" onclick="renomearLocal(\''+id+'\')">Renomear</button>'+
+      '<button class="lm-del" onclick="excluirLocal(\''+id+'\')">Excluir</button></div></div>';
   }).join('');
   m.innerHTML='<div class="loc-box"><h3>⚙︎ Gerenciar locais</h3>'+
     '<div style="font-size:11px;color:#8a948e;margin-bottom:8px">Excluir um local remove ele e as quadras dele (pede confirmação digitando o nome). Não dá pra excluir o último.</div>'+
@@ -1859,6 +1872,27 @@ function criarLocal(){
   setTimeout(function(){ alert('Local "'+nome+'" criado!\n\nAgora toque em ☰ Menu → ✏️ Editar quadras → ＋ Nova quadra para desenhar as quadras deste local. Elas já ficam georreferenciadas e o NDVI funciona dentro delas.'); },180);
 }
 
+function renomearLocal(id){
+  ensureLocais(); if(!LOCAIS[id]) return;
+  _locCss();
+  var m=document.getElementById('locModal');
+  if(!m){ m=document.createElement('div'); m.id='locModal'; m.className='loc-modal'; m.onclick=function(e){ if(e.target===m) m.style.display='none'; }; document.body.appendChild(m); }
+  m.innerHTML='<div class="loc-box"><h3>Renomear local</h3>'+
+    '<label>Novo nome</label><input id="locRenInp" autocomplete="off" value="'+esc(LOCAIS[id].nome||'')+'">'+
+    '<div class="row" style="margin-top:10px"><button class="loc-btn loc-ok" onclick="salvarRenomearLocal(\''+id+'\')">Salvar</button><button class="loc-btn loc-cancel" onclick="document.getElementById(\'locModal\').style.display=\'none\'">Cancelar</button></div></div>';
+  m.style.display='flex';
+  setTimeout(function(){ var i=document.getElementById('locRenInp'); if(i){ i.focus(); try{i.select();}catch(e){} i.onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); salvarRenomearLocal(id); } }; } },60);
+}
+function salvarRenomearLocal(id){
+  ensureLocais(); if(!LOCAIS[id]) return;
+  var nv=((document.getElementById('locRenInp')||{}).value||'').trim();
+  if(!nv){ alert('Dê um nome ao local.'); return; }
+  LOCAIS[id].nome=nv; saveLocais();
+  var m=document.getElementById('locModal'); if(m) m.style.display='none';
+  if(typeof buildLocalChip==='function') buildLocalChip();
+  try{ render(); }catch(e){}
+  if(document.getElementById('locManage')) gerenciarLocais();
+}
 /* ---- Menu de ferramentas (☰): Editar quadras / Alinhar / Backup / Importar ---- */
 function _menuCss(){ if(document.getElementById('menuCss'))return; var s=document.createElement('style'); s.id='menuCss';
   s.textContent='.main-menu{position:fixed;bottom:60px;right:14px;z-index:1500;background:#0e120e;border:1px solid #2a3a2a;border-radius:11px;box-shadow:0 10px 30px rgba(0,0,0,.6);overflow:hidden;display:flex;flex-direction:column;min-width:200px}.main-menu button{background:none;border:none;color:#cfe0cf;text-align:left;padding:12px 15px;font:600 13px system-ui,sans-serif;cursor:pointer;white-space:nowrap}.main-menu button:hover{background:#16241a}.main-menu .mm-sep{height:1px;background:#1e2e1e;margin:0}.main-menu .mm-user{padding:8px 15px 2px;font:600 11px system-ui,sans-serif;color:#6d7f73;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}';
@@ -2831,7 +2865,7 @@ function buildNdviPanel(){
   if(!p){ p=document.createElement('div'); p.id='ndviPanel'; p.className='ndvi-panel'; document.body.appendChild(p); }
   function btn(ix,label){ return '<button class="ndvi-ix'+(ndviIndex===ix?' on':'')+'" onclick="ndviSetIndex(\''+ix+'\')">'+(label||ix)+'</button>'; }
   p.innerHTML='<div class="gr-title">🛰️ ÍNDICES (Sentinel-2)</div>'+
-    '<div class="ndvi-ixrow">'+btn('NDVI')+btn('NDRE')+btn('GNDVI')+btn('NDMI')+btn('TRUECOLOR','🛰️ Cor real')+'<button class="ndvi-ix" onclick="ndviClear()">Nenhum</button></div>'+
+    '<div class="ndvi-ixrow">'+btn('NDVI')+btn('NDRE')+btn('GNDVI')+btn('NDMI')+'<button class="ndvi-ix" onclick="ndviClear()">Nenhum</button></div>'+
     '<label class="gr-ctl"><span>Data</span><input type="date" id="ndviDateInput" max="'+todayISO()+'"'+(ndviDate?' value="'+ndviDate+'"':'')+' onchange="ndviSetDate(this.value)"></label>'+
     '<label class="gr-ctl"><span>Sugestões</span><select id="ndviDateSel" onchange="ndviSetDate(this.value)"><option value="">datas com imagem…</option></select></label>'+
     '<label class="gr-ctl"><span>Opacidade</span><input type="range" min="0.2" max="1" step="0.05" value="'+ndviOpacity+'" oninput="ndviSetOpacity(this.value)"></label>'+
