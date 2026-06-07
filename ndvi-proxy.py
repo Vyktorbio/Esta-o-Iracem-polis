@@ -195,7 +195,7 @@ def do_stats(index, frm, to, geometry):
     out = []
     for it in d.get("data", []):
         interval = it.get("interval", {})
-        stt = (((it.get("outputs", {}).get("idx", {}) or {}).get("bands", {}) or {}).get("B0", {}) or {}).get("stats", {})
+        stt = (((((it.get("outputs") or {}).get("idx") or {}).get("bands") or {}).get("B0") or {}).get("stats") or {})
         if not stt or stt.get("sampleCount", 0) == 0 or stt.get("mean") is None:
             continue
         if stt.get("sampleCount", 0) - stt.get("noDataCount", 0) <= 0:
@@ -274,7 +274,7 @@ def do_dates(bbox, frm, to):
     best = {}
     for it in d.get("data", []):
         dt = (it.get("interval", {}).get("from", "") or "")[:10]
-        st = (((it.get("outputs", {}).get("idx", {}) or {}).get("bands", {}) or {}).get("B0", {}) or {}).get("stats", {})
+        st = (((((it.get("outputs") or {}).get("idx") or {}).get("bands") or {}).get("B0") or {}).get("stats") or {})
         sc = st.get("sampleCount", 0); nd = st.get("noDataCount", 0)
         if not dt or (sc - nd) <= 0:
             continue
@@ -366,10 +366,21 @@ def do_clima(mac):
         "wind_dir": _node(w.get("wind_direction")),
         "pressure": _node(p.get("relative")),
     }
-    # VPD vem em inHg na Ecowitt -> converte pra kPa (mais usado no agro)
+    # VPD -> kPa. A Ecowitt manda em inHg por padrao (mesmo com pressure_unitid=hPa);
+    # convertemos pela UNIDADE informada na resposta p/ ficar robusto a mudancas.
     vpd = _node(o.get("vpd"))
-    if vpd and isinstance(vpd.get("value"), float):
-        out["vpd"] = {"value": round(vpd["value"] * 3.38639, 2), "unit": "kPa"}
+    if vpd and isinstance(vpd.get("value"), (int, float)):
+        u = (vpd.get("unit") or "").lower().replace(" ", "")
+        val = float(vpd["value"])
+        if u in ("hpa", "mbar"):
+            kpa = val * 0.1
+        elif u == "kpa":
+            kpa = val
+        elif u in ("mmhg", "torr"):
+            kpa = val * 0.133322
+        else:  # inHg (padrao Ecowitt) ou unidade ausente
+            kpa = val * 3.38639
+        out["vpd"] = {"value": round(kpa, 2), "unit": "kPa"}
     else:
         out["vpd"] = vpd
     try:
@@ -433,7 +444,7 @@ class H(BaseHTTPRequestHandler):
                 return self._json(do_dates(bbox, q["from"], q["to"]))
             if u.path == "/index":
                 bbox = [float(x) for x in q["bbox"].split(",")]
-                img, ctype = do_index(q.get("index", "NDVI"), q["date"], bbox, q.get("width", 1024), None, q.get("raw"))
+                img, ctype = do_index(q.get("index", "NDVI"), q["date"], bbox, q.get("width", 1024), None, (str(q.get("raw") or "").strip().lower() in ("1", "true", "yes", "on")))
                 self.send_response(200); self._cors()
                 self.send_header("Content-Type", ctype or "image/png"); self.end_headers()
                 return self.wfile.write(img)
@@ -457,6 +468,8 @@ class H(BaseHTTPRequestHandler):
             try: detail = e.read().decode()[:500]
             except Exception: detail = ""
             self._json({"error": "Sentinel Hub %s: %s" % (e.code, detail)}, 502)
+        except KeyError as e:
+            self._json({"error": "Parametro obrigatorio ausente: " + str(e)}, 400)
         except Exception as e:
             self._json({"error": repr(e)}, 500)
 

@@ -1150,9 +1150,9 @@ function load(){
         data[k]=Object.assign({},DD[k],parsed[k]||{});
         if(!Array.isArray(data[k].estudos))data[k].estudos=[];
       });
-      // bring in extra studies ONLY for keys that exist in DD
+      // traz quadras customizadas (criadas pelo usuário, fora de DD) que estão salvas
       Object.keys(parsed).forEach(function(k){
-        if(!data[k]&&DD[k])data[k]=parsed[k];
+        if(!data[k])data[k]=parsed[k];
       });
       save(); // persiste a limpeza
       return;
@@ -1192,7 +1192,8 @@ function studyEvents(study){
       out.push({type:'apl',idx:i+1,total:n,date:dt});
     }
   }
-  (study.avaliacoes||[]).forEach(function(iso,i){
+  (study.avaliacoes||[]).forEach(function(av,i){
+    var iso=(av&&typeof av==='object')?av.data:av;  /* V2: avaliação é objeto {data,...}; V1: string */
     var d=pD(isoToBR(iso))||pD(iso);
     if(d && !isNaN(d))out.push({type:'eval',idx:i+1,date:d});
   });
@@ -2592,7 +2593,7 @@ function updateAgendaBadge(){
 
 /* ============ DETAIL PANEL ============ */
 /* ===== NDVI / NDRE / GNDVI (Sentinel-2 via proxy local) ===== */
-var NDVI_PROXY='https://ndvi-iracemapolis.onrender.com';
+var NDVI_PROXY=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://localhost:8799':'https://ndvi-iracemapolis.onrender.com';
 var ndviIndex=null, ndviDate=null, ndviOverlay=null, ndviOpacity=0.78, ndviClip=true, ndviMeans=null;
 /* NDVI usa sempre a área visível do mapa; o checkbox "Apenas quadras" liga/desliga o recorte. */
 var _ndviMoveT=null;
@@ -5407,11 +5408,9 @@ function exportData(){
 /* ===================== EXPORTAR PLANILHA EXCEL (.xlsx) ===================== */
 function _loadSheetJS(cb){
   if(window.XLSX){ cb(); return; }
-  var s=document.createElement('script');
-  s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
-  s.onload=function(){ cb(window.XLSX?null:new Error('Biblioteca não carregou.')); };
-  s.onerror=function(){ cb(new Error('Não consegui baixar a biblioteca da planilha (precisa de internet).')); };
-  document.head.appendChild(s);
+  function add(src,onerr){ var s=document.createElement('script'); s.src=src; s.onload=function(){ cb(window.XLSX?null:new Error('Biblioteca não carregou.')); }; s.onerror=onerr; document.head.appendChild(s); }
+  /* offline-first: usa a cópia vendorizada (cacheada pelo Service Worker); cai no CDN se faltar */
+  add('./vendor/xlsx.full.min.js', function(){ add('https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js', function(){ cb(new Error('Não consegui carregar a biblioteca da planilha.')); }); });
 }
 function _locNome(qid){ try{ ensureLocais(); }catch(e){} var l=(QLOCAL&&QLOCAL[qid])||HOME_LOCAL; return (LOCAIS&&LOCAIS[l]&&LOCAIS[l].nome)||(LOCAIS&&LOCAIS[HOME_LOCAL]&&LOCAIS[HOME_LOCAL].nome)||''; }
 function exportXlsx(soDoLocal){
