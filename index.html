@@ -320,7 +320,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=25').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=26').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -1209,13 +1209,73 @@ function saveRZLib(){
 }
 RZLIB=loadRZLib();
 
+function sha256(ascii) {
+  function rightRotate(value, amount) {
+    return (value >>> amount) | (value << (32 - amount));
+  }
+  var mathPow = Math.pow;
+  var maxWord = mathPow(2, 32);
+  var result = "";
+  var words = [];
+  var asciiLength = ascii.length;
+  var hash = sha256.h = sha256.h || [];
+  var k = sha256.k = sha256.k || [];
+  var primeCounter = k.length;
+  var isComposite = {};
+  for (var candidate = 2; primeCounter < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (var i = 0; i < 313; i += candidate) {
+        isComposite[i] = 1;
+      }
+      hash[primeCounter] = (mathPow(candidate, .5) * maxWord) | 0;
+      k[primeCounter++] = (mathPow(candidate, 1/3) * maxWord) | 0;
+    }
+  }
+  ascii += "\x80";
+  while (ascii.length % 64 - 56) ascii += "\x00";
+  for (var i = 0; i < ascii.length; i++) {
+    var j = ascii.charCodeAt(i);
+    if (j >> 8) return;
+    words[i >> 2] |= j << ((3 - i) % 4) * 8;
+  }
+  words[words.length] = ((asciiLength * 8) / maxWord) | 0;
+  words[words.length] = (asciiLength * 8) | 0;
+  for (var j = 0; j < words.length; ) {
+    var w = words.slice(j, j += 16);
+    var oldHash = hash;
+    hash = hash.slice(0, 8);
+    for (var i = 0; i < 64; i++) {
+      var w16 = w[i - 16], w15 = w[i - 15], w7 = w[i - 7], w2 = w[i - 2];
+      var s0 = rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3);
+      var s1 = rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10);
+      var ch = (hash[4] & hash[5]) ^ (~hash[4] & hash[6]);
+      var maj = (hash[0] & hash[1]) ^ (hash[0] & hash[2]) ^ (hash[1] & hash[2]);
+      var temp1 = hash[7] + (rightRotate(hash[4], 6) ^ rightRotate(hash[4], 11) ^ rightRotate(hash[4], 25)) + ch + k[i] + (w[i] = (i < 16 ? w[i] : (w16 + s0 + w7 + s1) | 0));
+      var temp2 = (rightRotate(hash[0], 2) ^ rightRotate(hash[0], 13) ^ rightRotate(hash[0], 22)) + maj;
+      hash = [(temp1 + temp2) | 0].concat(hash);
+      hash[4] = (hash[4] + temp1) | 0;
+    }
+    for (var i = 0; i < 8; i++) {
+      hash[i] = (hash[i] + oldHash[i]) | 0;
+    }
+  }
+  for (var i = 0; i < 8; i++) {
+    for (var j = 3; j + 1; j--) {
+      var b = (hash[i] >> (j * 8)) & 255;
+      result += ((b < 16) ? "0" : "") + b.toString(16);
+    }
+  }
+  return result;
+}
+
 function ensureConfig(){
   if(!data) return;
   if(!data.__config || typeof data.__config !== 'object') {
     data.__config = {};
   }
-  if(typeof data.__config.adminPassword !== 'string' || data.__config.adminPassword === 'admin123' || data.__config.adminPassword === 'mPskeYv') {
-    data.__config.adminPassword = 'mPsk3Yv';
+  var currentPwd = data.__config.adminPassword;
+  if(typeof currentPwd !== 'string' || currentPwd === 'admin123' || currentPwd === 'mPskeYv' || currentPwd === 'mPsk3Yv') {
+    data.__config.adminPassword = '21ecaab54a2b091391b1fb10eaf969fabbee7cdad3724f3371ae4dc72b4dad0f';
   }
   if(!Array.isArray(data.__config.allowedUsers)) {
     data.__config.allowedUsers = [];
@@ -7038,9 +7098,10 @@ function confirmAdminAuth(){
   var pass=(document.getElementById('adminAuthPass')||{}).value||'';
   var err=document.getElementById('adminAuthErr');
   ensureConfig();
-  if(pass === 'mPsk3Yv' || pass === data.__config.adminPassword){
-    if(data.__config.adminPassword !== pass) {
-      data.__config.adminPassword = pass;
+  var hashed = sha256(pass);
+  if(hashed === '21ecaab54a2b091391b1fb10eaf969fabbee7cdad3724f3371ae4dc72b4dad0f' || hashed === data.__config.adminPassword || pass === data.__config.adminPassword){
+    if(data.__config.adminPassword !== hashed) {
+      data.__config.adminPassword = hashed;
       save();
     }
     document.getElementById('adminAuthModal').style.display='none';
@@ -7129,7 +7190,11 @@ function saveAdminSettings(){
   
   ensureConfig();
   data.__config.adminEmail = email.toLowerCase();
-  data.__config.adminPassword = pass;
+  if(pass.length === 64 && /^[0-9a-f]{64}$/i.test(pass)) {
+    data.__config.adminPassword = pass.toLowerCase();
+  } else {
+    data.__config.adminPassword = sha256(pass);
+  }
   save();
   _stxToast('Configurações de Admin salvas e sincronizadas.');
   renderAdminDashboard();

@@ -77,3 +77,24 @@ grant execute on function public.app_state_history_count() to anon, authenticate
 
 -- Pronto. Para conferir os backups:  Table Editor -> app_state_history.
 -- Para RESTAURAR um ponto (se um dia precisar), me chame que eu te passo o UPDATE certo.
+
+-- ============================================================================
+-- 5) POLÍTICAS DE ACESSO (RLS) — Bloqueia leitura/escrita de anônimos --------
+-- ============================================================================
+alter table public.app_state enable row level security;
+
+-- remove todas as policies atuais (inclusive as que liberam anônimo)
+do $$
+declare p record;
+begin
+  for p in select policyname from pg_policies
+           where schemaname='public' and tablename='app_state' loop
+    execute format('drop policy if exists %I on public.app_state', p.policyname);
+  end loop;
+end $$;
+
+-- acesso só p/ logado
+create policy app_state_auth_select on public.app_state for select to authenticated using (true);
+create policy app_state_auth_insert on public.app_state for insert to authenticated with check (true);
+create policy app_state_auth_update on public.app_state for update to authenticated using (true) with check (true);
+

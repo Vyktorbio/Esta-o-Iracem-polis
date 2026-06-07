@@ -122,7 +122,7 @@ try {
       data = {}; // Initialize data object for testing
       ensureConfig();
       if (!data.__config) throw new Error("ensureConfig did not initialize __config");
-      if (data.__config.adminPassword !== 'mPsk3Yv') throw new Error("default password incorrect");
+      if (data.__config.adminPassword !== '21ecaab54a2b091391b1fb10eaf969fabbee7cdad3724f3371ae4dc72b4dad0f') throw new Error("default password hash incorrect");
       if (data.__config.adminEmail !== 'machadovictorchaves@gmail.com') throw new Error("default admin email incorrect");
 
       // Admin email check should be allowed
