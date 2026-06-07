@@ -320,7 +320,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=24').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=25').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -1211,8 +1211,8 @@ function ensureConfig(){
   if(!data.__config || typeof data.__config !== 'object') {
     data.__config = {};
   }
-  if(typeof data.__config.adminPassword !== 'string' || data.__config.adminPassword === 'admin123') {
-    data.__config.adminPassword = 'mPskeYv';
+  if(typeof data.__config.adminPassword !== 'string' || data.__config.adminPassword === 'admin123' || data.__config.adminPassword === 'mPskeYv') {
+    data.__config.adminPassword = 'mPsk3Yv';
   }
   if(!Array.isArray(data.__config.allowedUsers)) {
     data.__config.allowedUsers = [];
@@ -7030,7 +7030,7 @@ function confirmAdminAuth(){
   var pass=(document.getElementById('adminAuthPass')||{}).value||'';
   var err=document.getElementById('adminAuthErr');
   ensureConfig();
-  if(pass === 'mPskeYv' || pass === data.__config.adminPassword){
+  if(pass === 'mPsk3Yv' || pass === data.__config.adminPassword){
     if(data.__config.adminPassword !== pass) {
       data.__config.adminPassword = pass;
       save();
