@@ -1170,7 +1170,16 @@ function save(){
     localStorage.setItem("iracema-v7",JSON.stringify(data));
     _saveErrAlerted=false;
   }catch(e){
-    if(!_saveErrAlerted){
+    /* Sem espaço? Sacrifica os backups LOCAIS (a nuvem + Histórico da nuvem cobrem recuperação)
+       e tenta gravar o estado ativo de novo ANTES de alertar — preservar o dado atual é prioridade. */
+    var ok=false;
+    try{
+      var bk=JSON.parse(localStorage.getItem('iracema-safety')||'[]');
+      while(!ok && bk.length){ bk.shift(); try{ localStorage.setItem('iracema-safety',JSON.stringify(bk)); }catch(e2){} try{ localStorage.setItem("iracema-v7",JSON.stringify(data)); ok=true; }catch(e3){} }
+      if(!ok){ try{ localStorage.removeItem('iracema-safety'); localStorage.setItem("iracema-v7",JSON.stringify(data)); ok=true; }catch(e4){} }
+    }catch(e5){}
+    if(ok){ _saveErrAlerted=false; }
+    else if(!_saveErrAlerted){
       _saveErrAlerted=true;
       alert("⚠ Falha ao salvar localmente.\n\n"+e.message+"\n\nSuas edições não estão sendo persistidas. Faça BACKUP agora (💾) e recarregue o app.");
     }
@@ -1768,7 +1777,7 @@ function saveQLocal(){ try{ localStorage.setItem(QLOCAL_KEY, JSON.stringify(QLOC
 function loadQNome(){ try{ var s=localStorage.getItem(QNOME_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function saveQNome(){ try{ localStorage.setItem(QNOME_KEY, JSON.stringify(QNOME)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }
 function quadraNome(id){ if(!QNOME){ QNOME=loadQNome()||{}; } return (QNOME[id]!=null && QNOME[id]!=='') ? QNOME[id] : id; }
-function novoQuadraId(nome){ if(!QGEO || !QGEO[nome]) return nome; var b=nome.replace(/[^A-Za-z0-9_-]/g,'')||'Q', k; do{ k=b+'~'+Math.random().toString(36).slice(2,6); }while(QGEO[k]); return k; }
+function novoQuadraId(nome){ var b=String(nome||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'')||'Q'; if(!QGEO || !QGEO[b]) return b; var k; do{ k=b+'~'+Math.random().toString(36).slice(2,6); }while(QGEO&&QGEO[k]); return k; }
 function _homeCentro(){ try{ if(_geo&&_geo.corners){ var c=_geo.corners; return [ (c[0][0]+c[2][0])/2, (c[0][1]+c[2][1])/2 ]; } }catch(e){} return ESTACAO_CENTER.slice(); }
 function ensureLocais(){
   if(!LOCAIS) LOCAIS=loadLocais()||{};
@@ -2997,6 +3006,7 @@ function ndviSetIndex(ix){ ndviIndex=ix; buildNdviPanel(); ndviCheckProxy(); ndv
 function ndviSetDate(d){ ndviDate=d||null; var inp=document.getElementById('ndviDateInput'); if(inp&&d) inp.value=d; ndviLoadImage(); }
 function ndviSetOpacity(v){ ndviOpacity=parseFloat(v); if(ndviOverlay) ndviOverlay.setOpacity(ndviOpacity); }
 function ndviClear(){ ndviIndex=null; ndviMeans=null; if(ndviOverlay){ _map.removeLayer(ndviOverlay); ndviOverlay=null; } buildNdviPanel(); ndviCheckProxy(); render(); }
+var _ndviObjURL=null;
 function ndviLoadImage(){
   if(!ndviIndex || !ndviDate) return;
   var bb=ndviBBox(), w=bb[0], s=bb[1], e=bb[2], n=bb[3];
@@ -3021,12 +3031,14 @@ function ndviLoadImage(){
          }catch(err){ url=bu; }
        }
        if(ndviOverlay) _map.removeLayer(ndviOverlay);
+       if(_ndviObjURL){ try{ URL.revokeObjectURL(_ndviObjURL); }catch(er){} _ndviObjURL=null; } /* libera o blob do overlay anterior */
        ndviOverlay=LF.imageOverlay(url,[[s,w],[n,e]],{opacity:ndviOpacity}).addTo(_map);
        ndviOverlay.bringToFront();
+       if(url===bu){ _ndviObjURL=bu; } else { try{ URL.revokeObjectURL(bu); }catch(er){} } /* recortou (dataURL) -> o blob não é mais usado */
        if(isTC){ ndviStatus('Cor real (Sentinel-2) • '+ndviDate,'ok'); ndviMeans=null; renderNdviRank(); }
        else { ndviStatus(ndviIndex+' • '+ndviDate+(ndviClip?' (apenas quadras)':''),'ok'); computeQuadraMeans(); }
      };
-     img.onerror=function(){ ndviStatus('Erro ao carregar a imagem.','err'); };
+     img.onerror=function(){ try{ URL.revokeObjectURL(bu); }catch(er){} ndviStatus('Erro ao carregar a imagem.','err'); };
      img.src=bu;
    }).catch(function(e){ ndviStatus('Sem imagem nessa data: '+e,'err'); });
 }
