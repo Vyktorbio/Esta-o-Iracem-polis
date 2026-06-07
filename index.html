@@ -341,6 +341,10 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 /* Ferramenta de alinhamento (georreferência) */
 .gr-panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:1200;background:rgba(8,14,8,.96);border:1px solid #2a3a2a;border-radius:12px;padding:12px 14px;width:340px;max-width:94vw;box-shadow:0 12px 40px rgba(0,0,0,.6)}
 .gr-title{font-size:11px;font-weight:700;color:#8c8;letter-spacing:2px;margin-bottom:6px}
+.gr-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.gr-head .gr-title{margin-bottom:0;flex:1}
+.gr-x{background:none;border:none;color:var(--text-3,#7c8a80);font-size:22px;line-height:.8;cursor:pointer;padding:0 2px;margin:-2px -4px 0 0;flex:none}
+.gr-x:hover{color:var(--danger,#e0566b)}
 .gr-hint{font-size:11px;color:#9ab39a;line-height:1.45;margin-bottom:9px}
 .gr-hint b{color:#cfe;font-weight:700}
 .gr-op{display:flex;align-items:center;gap:8px;font-size:11px;color:#9ab39a;margin-bottom:10px}
@@ -3079,10 +3083,18 @@ function openNoteModal(lat, lng){
      
      '<label class="e-lbl">CATEGORIA</label>'+
      '<select id="noteCategory" class="e-inp" required style="background:#060a06;color:#ddd;border:1px solid #1e2e1e;">'+
-       '<option value="praga">🕷️ Praga</option>'+
-       '<option value="doenca">🦠 Doença</option>'+
-       '<option value="daninha">🌱 Planta Daninha</option>'+
-       '<option value="deficiencia">🧪 Deficiência Nutricional</option>'+
+       '<optgroup label="Agronômico">'+
+         '<option value="praga">🕷️ Praga</option>'+
+         '<option value="doenca">🦠 Doença</option>'+
+         '<option value="daninha">🌱 Planta Daninha</option>'+
+         '<option value="deficiencia">🧪 Deficiência Nutricional</option>'+
+       '</optgroup>'+
+       '<optgroup label="Manutenção / Infraestrutura">'+
+         '<option value="irrigacao">💧 Irrigação</option>'+
+         '<option value="vazamento">💦 Vazamento</option>'+
+         '<option value="buraco">🕳️ Buraco / Erosão</option>'+
+         '<option value="manutencao">🔧 Manutenção (geral)</option>'+
+       '</optgroup>'+
        '<option value="outro">📝 Outro / Observação Geral</option>'+
      '</select>'+
      
@@ -3258,6 +3270,18 @@ function renderNotas(){
     }else if(n.categoria==='deficiencia'){
       color='#29b6f6';
       iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></svg>';
+    }else if(n.categoria==='irrigacao'){
+      color='#2196f3';
+      iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>';
+    }else if(n.categoria==='vazamento'){
+      color='#00acc1';
+      iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16.3c2.2 0 4-1.83 4-4.05 0-1.16-.57-2.26-1.71-3.19S7.29 4.8 7 3.5c-.29 1.3-1.14 2.63-2.29 3.56S3 11.09 3 12.25c0 2.22 1.8 4.05 4 4.05z"/><path d="M12.56 6.6A11 11 0 0 0 14 3.02c.5 2.5 2 4.9 4 6.5s3 3.5 3 5.5a6.98 6.98 0 0 1-11.91 4.97"/></svg>';
+    }else if(n.categoria==='buraco'){
+      color='#8d6e63';
+      iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></svg>';
+    }else if(n.categoria==='manutencao'){
+      color='#607d8b';
+      iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
     }else{
       color='#26a69a';
       iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
@@ -3290,6 +3314,10 @@ function getNotePopupHtml(n){
     doenca:'🦠 Doença',
     daninha:'🌱 Planta Daninha',
     deficiencia:'🧪 Deficiência',
+    irrigacao:'💧 Irrigação',
+    vazamento:'💦 Vazamento',
+    buraco:'🕳️ Buraco / Erosão',
+    manutencao:'🔧 Manutenção',
     outro:'📝 Geral'
   };
   
@@ -3298,6 +3326,10 @@ function getNotePopupHtml(n){
     doenca:'#ff9800',
     daninha:'#ab47bc',
     deficiencia:'#29b6f6',
+    irrigacao:'#2196f3',
+    vazamento:'#00acc1',
+    buraco:'#8d6e63',
+    manutencao:'#607d8b',
     outro:'#26a69a'
   };
   
@@ -3476,7 +3508,7 @@ function buildClimaPanel(){
     var nm=(typeof LOCAIS==='object'&&LOCAIS&&localAtivo&&LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'—';
     ctrl='<div class="gr-ctl"><span>Local</span><span style="flex:1;color:var(--accent,#37d684);font-weight:700;overflow:hidden;text-overflow:ellipsis">'+esc(nm)+'</span><button class="ndvi-ix" onclick="climaGps()">'+ic('pin',14)+' GPS</button></div>';
   }
-  p.innerHTML='<div class="gr-title">'+ic('weather',14)+' CLIMA</div>'+modeBtns+ctrl+
+  p.innerHTML='<div class="gr-head"><div class="gr-title">'+ic('weather',14)+' CLIMA</div><button class="gr-x" onclick="toggleClima()" aria-label="Fechar" title="Fechar">×</button></div>'+modeBtns+ctrl+
     '<div id="climaBody"></div>'+
     '<div class="gr-btns"><button class="gr-cancel" onclick="toggleClima()">Fechar</button></div>';
   p.style.display='block';
@@ -3650,7 +3682,7 @@ function buildNdviPanel(){
   var p=document.getElementById('ndviPanel');
   if(!p){ p=document.createElement('div'); p.id='ndviPanel'; p.className='ndvi-panel'; document.body.appendChild(p); }
   function btn(ix,label){ return '<button class="ndvi-ix'+(ndviIndex===ix?' on':'')+'" onclick="ndviSetIndex(\''+ix+'\')">'+(label||ix)+'</button>'; }
-  p.innerHTML='<div class="gr-title">'+ic('sat',14)+' ÍNDICES (Sentinel-2)</div>'+
+  p.innerHTML='<div class="gr-head"><div class="gr-title">'+ic('sat',14)+' ÍNDICES (Sentinel-2)</div><button class="gr-x" onclick="toggleNdvi()" aria-label="Fechar" title="Fechar">×</button></div>'+
     '<div class="ndvi-ixrow">'+btn('NDVI')+btn('NDRE')+btn('GNDVI')+btn('NDMI')+'<button class="ndvi-ix" onclick="ndviClear()">Nenhum</button></div>'+
     '<label class="gr-ctl"><span>Data</span><input type="date" id="ndviDateInput" max="'+todayISO()+'"'+(ndviDate?' value="'+ndviDate+'"':'')+' onchange="ndviSetDate(this.value)"></label>'+
     '<label class="gr-ctl"><span>Sugestões</span><select id="ndviDateSel" onchange="ndviSetDate(this.value)"><option value="">datas com imagem…</option></select></label>'+
