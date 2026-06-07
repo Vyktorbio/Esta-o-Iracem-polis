@@ -320,7 +320,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=19').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=20').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -1206,6 +1206,22 @@ function saveRZLib(){
 }
 RZLIB=loadRZLib();
 
+function ensureConfig(){
+  if(!data) return;
+  if(!data.__config || typeof data.__config !== 'object') {
+    data.__config = {};
+  }
+  if(typeof data.__config.adminPassword !== 'string') {
+    data.__config.adminPassword = 'admin123';
+  }
+  if(!Array.isArray(data.__config.allowedUsers)) {
+    data.__config.allowedUsers = [];
+  }
+  if(typeof data.__config.adminEmail !== 'string') {
+    data.__config.adminEmail = '';
+  }
+}
+
 function load(){
   try{
     var s=localStorage.getItem("iracema-v7");
@@ -1220,6 +1236,7 @@ function load(){
       Object.keys(parsed).forEach(function(k){
         if(!data[k])data[k]=parsed[k];
       });
+      ensureConfig();
       save(); // persiste a limpeza
       return;
     }
@@ -1229,6 +1246,7 @@ function load(){
     data[k]=Object.assign({},DD[k]);
     if(!Array.isArray(data[k].estudos))data[k].estudos=[];
   });
+  ensureConfig();
 }
 var _saveErrAlerted=false;
 function save(){
@@ -2083,6 +2101,7 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();openBackups()">'+ic('archive')+' Backups (restaurar)</button>'+
     '<button onclick="closeMainMenu();openCloudHistory()">'+ic('refresh')+' Histórico da nuvem</button>'+
     '<button onclick="closeMainMenu();openIntegridade()">'+ic('search')+' Verificar integridade</button>'+
+    '<button onclick="closeMainMenu();openAdminPanel()">'+ic('gear')+' Painel Admin</button>'+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
   document.body.appendChild(m);
   /* abre logo abaixo do botão ☰ (canto superior direito) */
@@ -2272,6 +2291,7 @@ function cloudApply(st){
     if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]}; }); }
     ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip();
     render(); if(typeof updateAgendaBadge==='function') updateAgendaBadge();
+    enforceAccess();
   }catch(e){}
   _cloudApplying=false;
 }
@@ -2374,6 +2394,10 @@ function cloudMerge(local,cloud){
     if(delQ[qid]) return; /* quadra excluída: não ressuscita pelo merge */
     var lq=(local.data||{})[qid], cq=(cloud.data||{})[qid];
     if(!lq){ out.data[qid]=cq; return; } if(!cq){ out.data[qid]=lq; return; }
+    if(qid === '__config'){
+      out.data[qid] = _mergeObj(cq, lq);
+      return;
+    }
     var m={},kk; for(kk in cq)m[kk]=cq[kk]; for(kk in lq)m[kk]=lq[kk];
     var delS=_mergeObj(lq._deletedStudies,cq._deletedStudies); m._deletedStudies=delS;
     m.estudos=_mergeById(lq.estudos,cq.estudos,_mergeStudy,delS);
@@ -2514,11 +2538,33 @@ function doLogin(){
     if(res && res.error){ authErr(traduzAuthErro(res.error.message)); }
   }, function(){ authBusy(false); authErr('Falha de conexão.'); });
 }
+function checkAccess(email){
+  if(!email) return false;
+  ensureConfig();
+  var conf = data.__config;
+  if(!conf.adminEmail) {
+    conf.adminEmail = email.toLowerCase();
+    save();
+  }
+  if(email.toLowerCase() === conf.adminEmail.toLowerCase()) {
+    return true;
+  }
+  var user = conf.allowedUsers.find(function(u){ return u.email.toLowerCase() === email.toLowerCase(); });
+  return !!user;
+}
+function enforceAccess(){
+  if(!_authUser || !_authUser.email) return;
+  if(!checkAccess(_authUser.email)){
+    alert("Acesso não autorizado pelo administrador para " + _authUser.email + ".");
+    doLogout();
+  }
+}
 function doLogout(){ if(typeof closeMainMenu==='function') closeMainMenu(); if(SB){ try{ SB.auth.signOut(); }catch(e){} } }
 function onAuthed(user){
   _authUser=user; hideAuthGate();
   if(!_appStarted){ _appStarted=true; cloudStart(); }
   else if(typeof cloudResync==='function'){ cloudResync(); }
+  enforceAccess();
 }
 /* Gate de login: só libera o app (e a leitura/escrita na nuvem) após autenticar.
    A sessão persiste no navegador (supabase) -> funciona offline no campo depois do 1º login. */
@@ -4705,10 +4751,18 @@ function normalizeStudy(s){
 function logStudyAuditInObject(study, action, details) {
   if(!study) return;
   if(!Array.isArray(study.audit)) study.audit = [];
-  var userEmail = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : 'Local/Offline';
+  var email = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : null;
+  var userName = 'Local/Offline';
+  if(email) {
+    ensureConfig();
+    var user = (data && data.__config && data.__config.allowedUsers || []).find(function(u){ return u.email.toLowerCase() === email.toLowerCase(); });
+    if(user) userName = user.nome;
+    else if(data && data.__config && data.__config.adminEmail && email.toLowerCase() === data.__config.adminEmail.toLowerCase()) userName = 'Administrador';
+    else userName = email;
+  }
   study.audit.push({
     ts: Date.now(),
-    user: userEmail,
+    user: userName,
     action: action,
     details: details
   });
@@ -5721,7 +5775,15 @@ function saveAplicacao(){
 /* ===== Grade de avaliação: tratamentos (linhas) × variáveis avaliadas (colunas dinâmicas) ===== */
 var _avGrid={variaveis:[],notas:{},tipos:{},meta:{}};
 var _avAuto={on:false,pos:0};
-function _avGridUser(){ return (_authUser&&(_authUser.email||_authUser.id))||'local'; }
+function _avGridUser(){
+  var email = _authUser && _authUser.email;
+  if(!email) return 'local';
+  ensureConfig();
+  var user = (data && data.__config && data.__config.allowedUsers || []).find(function(u){ return u.email.toLowerCase() === email.toLowerCase(); });
+  if(user) return user.nome;
+  if(data && data.__config && data.__config.adminEmail && email.toLowerCase() === data.__config.adminEmail.toLowerCase()) return 'Administrador';
+  return email;
+}
 function _avTouchCell(row,v){
   if(!_avGrid.meta||typeof _avGrid.meta!=='object') _avGrid.meta={};
   if(!_avGrid.meta[row]) _avGrid.meta[row]={};
@@ -6937,6 +6999,162 @@ try{load();}catch(e){
   b.textContent='ERRO LOAD: '+e.message+'\n'+(e.stack||'');
   document.body.appendChild(b);
 }
+/* ===================== PAINEL DO ADMINISTRADOR (CONFIGURAÇÕES & ACL) ===================== */
+function openAdminPanel(){
+  ensureConfig();
+  var modal=document.getElementById('adminAuthModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='adminAuthModal';
+    modal.className='delpwd-ovl';
+    modal.onclick=function(e){ if(e.target===modal) modal.style.display='none'; };
+    document.body.appendChild(modal);
+  }
+  modal.style.display='flex';
+  modal.innerHTML='<div class="delpwd-box" style="border:1px solid var(--accent,#37d684)">'+
+    '<div class="delpwd-title" style="color:var(--accent,#37d684)">Painel do Administrador</div>'+
+    '<div class="delpwd-sub">Digite a senha de administrador do Agracta.</div>'+
+    '<label class="delpwd-lab">Senha de Admin</label>'+
+    '<input id="adminAuthPass" class="delpwd-inp" type="password" onkeydown="if(event.key===\'Enter\')confirmAdminAuth()">'+
+    '<div id="adminAuthErr" class="delpwd-err" style="color:#ff9a8a"></div>'+
+    '<div class="delpwd-actions">'+
+      '<button class="delpwd-ok" style="background:#1f5a2a;color:#eafaea" onclick="confirmAdminAuth()">Entrar</button>'+
+      '<button class="delpwd-cancel" onclick="document.getElementById(\'adminAuthModal\').style.display=\'none\'">Cancelar</button>'+
+    '</div>'+
+  '</div>';
+  setTimeout(function(){ var i=document.getElementById('adminAuthPass'); if(i)i.focus(); }, 100);
+}
+
+function confirmAdminAuth(){
+  var pass=(document.getElementById('adminAuthPass')||{}).value||'';
+  var err=document.getElementById('adminAuthErr');
+  ensureConfig();
+  if(pass === data.__config.adminPassword){
+    document.getElementById('adminAuthModal').style.display='none';
+    showAdminDashboard();
+  } else {
+    if(err) err.textContent='Senha incorreta.';
+  }
+}
+
+function showAdminDashboard(){
+  ensureConfig();
+  var modal=document.getElementById('adminDashboardModal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='adminDashboardModal';
+    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3300;display:flex;align-items:center;justify-content:center;padding:16px';
+    modal.onclick=function(e){ if(e.target===modal) closeAdminDashboard(); };
+    document.body.appendChild(modal);
+  }
+  modal.style.display='flex';
+  renderAdminDashboard();
+}
+
+function closeAdminDashboard(){
+  var m=document.getElementById('adminDashboardModal');
+  if(m) m.style.display='none';
+}
+
+function renderAdminDashboard(){
+  ensureConfig();
+  var m=document.getElementById('adminDashboardModal');
+  if(!m) return;
+  
+  var conf = data.__config;
+  var users = conf.allowedUsers || [];
+  
+  var rows = users.length ? users.map(function(u, idx){
+    return '<div style="border-bottom:1px solid #2a3a2a;padding:8px 0;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
+      '<div style="min-width:0;text-align:left">'+
+        '<div style="font-weight:700;font-size:13px;color:#eaf3ed">'+esc(u.nome)+'</div>'+
+        '<div style="font-size:11px;color:#8aa88a">'+esc(u.email)+'</div>'+
+      '</div>'+
+      '<button onclick="removeAllowedUser('+idx+')" style="background:#5a1f1f;color:#faeaea;border:none;border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer">Remover</button>'+
+    '</div>';
+  }).join('') : '<div style="color:#8aa88a;font-size:12px;margin:12px 0;text-align:center">Nenhum técnico cadastrado ainda.</div>';
+  
+  m.innerHTML = '<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:14px;max-width:480px;width:100%;padding:16px;box-sizing:border-box;color:#eaf3ed;max-height:85vh;overflow:auto;font:13px system-ui,sans-serif">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">⚙️ Painel do Administrador (Agracta)</b><button onclick="closeAdminDashboard()" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
+    '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Controle de acesso BPL para sincronização de dados.</div>'+
+    
+    '<div style="margin-top:14px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#111b13;text-align:left">'+
+      '<div style="font-weight:700;color:#37d684;margin-bottom:6px">Configurações de Acesso Admin</div>'+
+      '<div style="display:flex;flex-direction:column;gap:8px">'+
+        '<label style="display:block"><span style="font-size:10px;color:#8aa88a">E-mail do Administrador</span>'+
+        '<input id="admEmail" class="delpwd-inp" style="padding:8px;font-size:13px;margin-top:3px" type="email" value="'+esc(conf.adminEmail)+'" placeholder="ex: admin@agracta.com"></label>'+
+        '<label style="display:block"><span style="font-size:10px;color:#8aa88a">Senha do Painel Admin</span>'+
+        '<input id="admPass" class="delpwd-inp" style="padding:8px;font-size:13px;margin-top:3px" type="password" value="'+esc(conf.adminPassword)+'" placeholder="Senha do painel"></label>'+
+        '<button onclick="saveAdminSettings()" style="width:100%;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px;font-weight:700;margin-top:4px;cursor:pointer">Salvar Configurações</button>'+
+      '</div>'+
+    '</div>'+
+    
+    '<div style="margin-top:14px;text-align:left">'+
+      '<b style="color:#37d684">Técnicos Permitidos</b>'+
+      '<div style="max-height:160px;overflow-y:auto;margin-top:6px;border:1px solid #2a3a2a;border-radius:10px;padding:8px;background:#090f0a">'+
+        rows+
+      '</div>'+
+    '</div>'+
+    
+    '<div style="margin-top:12px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#111b13;text-align:left">'+
+      '<div style="font-weight:700;color:#37d684;margin-bottom:6px">Autorizar Novo Técnico</div>'+
+      '<div style="display:flex;gap:6px">'+
+        '<input id="addUsrEmail" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="email" placeholder="E-mail">'+
+        '<input id="addUsrNome" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="text" placeholder="Nome do Técnico">'+
+      '</div>'+
+      '<button onclick="addAllowedUser()" style="width:100%;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px;font-weight:700;margin-top:8px;cursor:pointer">Autorizar Técnico</button>'+
+    '</div>'+
+    
+    '<div style="margin-top:14px"><button onclick="closeAdminDashboard()" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar e Sair</button></div>'+
+  '</div>';
+}
+
+function saveAdminSettings(){
+  var email = (document.getElementById('admEmail')||{}).value.trim();
+  var pass = (document.getElementById('admPass')||{}).value;
+  if(!email || !pass){ alert('Preencha o e-mail e a senha.'); return; }
+  
+  ensureConfig();
+  data.__config.adminEmail = email.toLowerCase();
+  data.__config.adminPassword = pass;
+  save();
+  _stxToast('Configurações de Admin salvas e sincronizadas.');
+  renderAdminDashboard();
+}
+
+function addAllowedUser(){
+  var email = (document.getElementById('addUsrEmail')||{}).value.trim();
+  var nome = (document.getElementById('addUsrNome')||{}).value.trim();
+  if(!email || !nome){ alert('Preencha o e-mail e o nome do técnico.'); return; }
+  
+  ensureConfig();
+  var exists = data.__config.allowedUsers.some(function(u){ return u.email.toLowerCase() === email.toLowerCase(); });
+  if(exists){ alert('Este e-mail já está autorizado.'); return; }
+  
+  data.__config.allowedUsers.push({ email: email, nome: nome });
+  save();
+  _stxToast('Técnico ' + nome + ' autorizado.');
+  renderAdminDashboard();
+}
+
+function removeAllowedUser(idx){
+  ensureConfig();
+  var users = data.__config.allowedUsers;
+  if(idx >= 0 && idx < users.length) {
+    var nome = users[idx].nome;
+    users.splice(idx, 1);
+    save();
+    _stxToast('Técnico ' + nome + ' removido.');
+    renderAdminDashboard();
+  }
+}
+
+// Detecção de URL admin (?admin ou #admin)
+if(window.location.search.indexOf('admin')>=0 || window.location.hash.indexOf('admin')>=0){
+  history.replaceState(null, "", window.location.pathname);
+  setTimeout(function(){ openAdminPanel(); }, 800);
+}
+
 /* Fallback triplo: garante init() mesmo se img.onload nao disparar */
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded',function(){setTimeout(init,100)});
