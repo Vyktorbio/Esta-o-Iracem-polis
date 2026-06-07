@@ -1,4 +1,4 @@
-# Estação Experimental Iracemápolis — Mapa & NDVI
+# Agracta — registros de ensaios de campo (mapa + NDVI)
 
 App de agricultura de precisão da estação experimental (Plantec, Iracemápolis‑SP):
 mapa de satélite real, quadras georreferenciadas (área e coordenadas), fenologia/estudos,

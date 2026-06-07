@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mapa de Estudos</title>
+<title>Agracta</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;background:#050805}
@@ -318,7 +318,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Mapa de Estudos">
+<meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=17').catch(function(){});});}</script>
 <style>
@@ -366,6 +366,9 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 .ndvi-panel{position:fixed;left:10px;top:64px;z-index:1200;background:rgba(8,14,8,.96);border:1px solid #2a3a2a;border-radius:12px;padding:12px 14px;width:272px;max-width:92vw;box-shadow:0 12px 40px rgba(0,0,0,.6);display:none}
 .ndvi-ixrow{display:flex;gap:5px;margin:9px 0}
 .ndvi-ix{flex:1;padding:7px 3px;border-radius:6px;border:1px solid #2a3a2a;background:#111811;color:#8aa88a;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}
+.ndvi-clear-btn{width:100%;margin-top:8px;padding:11px;border-radius:10px;border:1px solid #3a4a42;background:#17231d;color:#cfe0d4;font-size:12.5px;font-weight:800;letter-spacing:.3px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:7px}
+.ndvi-clear-btn:hover{background:#1f2e26;border-color:#4a5a52;color:#eafaf0}
+.ndvi-clear-btn:active{transform:translateY(1px)}
 .ndvi-ix.on{background:#1e3a1e;color:#bdf0bd;border-color:#3a5a3a}
 .ndvi-legend{display:flex;align-items:center;gap:6px;font-size:9px;color:#789;margin:8px 0 2px}
 .ndvi-bar{flex:1;height:9px;border-radius:3px;background:linear-gradient(90deg,#6a4524,#a8431f,#e6732f,#f2d959,#9bc24a,#59b745,#1d7a25,#0a4d14)}
@@ -658,7 +661,7 @@ body.map-full .top-bar,body.map-full .toolbar-extra,body.map-full .leaflet-contr
 .rot-ctl button{background:rgba(255,255,255,.95)!important;color:#28312c!important;border-color:var(--border)!important} .rot-ctl button:hover{color:var(--accent-d)!important}
 </style>
 <style id="fieldConsoleTheme">
-/* ===================== TEMA Mapa de Estudos - console operacional ===================== */
+/* ===================== TEMA Agracta - console operacional ===================== */
 :root{
   --vm-bg:#0c1110;
   --vm-glass:rgba(15,20,18,.88);
@@ -2486,7 +2489,7 @@ function buildAuthGate(){
   var g=document.getElementById('authGate');
   if(!g){ g=document.createElement('div'); g.id='authGate'; g.className='auth-gate'; document.body.appendChild(g); }
   g.innerHTML='<form class="auth-box" onsubmit="return false">'+
-    '<div class="auth-logo">Mapa de Estudos</div>'+
+    '<div class="auth-logo">Agracta</div>'+
     '<div class="auth-title">Entrar</div>'+
     '<div class="auth-sub">Acesso restrito</div>'+
     '<label class="auth-l">E-MAIL</label><input id="authEmail" class="auth-i" type="email" autocomplete="username" inputmode="email" placeholder="voce@exemplo.com">'+
@@ -3510,7 +3513,7 @@ function buildClimaPanel(){
   }
   p.innerHTML='<div class="gr-head"><div class="gr-title">'+ic('weather',14)+' CLIMA</div><button class="gr-x" onclick="toggleClima()" aria-label="Fechar" title="Fechar">×</button></div>'+modeBtns+ctrl+
     '<div id="climaBody"></div>'+
-    '<div class="gr-btns"><button class="gr-cancel" onclick="toggleClima()">Fechar</button></div>';
+    '';
   p.style.display='block';
 }
 function _climaLocalCoord(){
@@ -3683,7 +3686,7 @@ function buildNdviPanel(){
   if(!p){ p=document.createElement('div'); p.id='ndviPanel'; p.className='ndvi-panel'; document.body.appendChild(p); }
   function btn(ix,label){ return '<button class="ndvi-ix'+(ndviIndex===ix?' on':'')+'" onclick="ndviSetIndex(\''+ix+'\')">'+(label||ix)+'</button>'; }
   p.innerHTML='<div class="gr-head"><div class="gr-title">'+ic('sat',14)+' ÍNDICES (Sentinel-2)</div><button class="gr-x" onclick="toggleNdvi()" aria-label="Fechar" title="Fechar">×</button></div>'+
-    '<div class="ndvi-ixrow">'+btn('NDVI')+btn('NDRE')+btn('GNDVI')+btn('NDMI')+'<button class="ndvi-ix" onclick="ndviClear()">Nenhum</button></div>'+
+    '<div class="ndvi-ixrow">'+btn('NDVI')+btn('NDRE')+btn('GNDVI')+btn('NDMI')+'</div>'+
     '<label class="gr-ctl"><span>Data</span><input type="date" id="ndviDateInput" max="'+todayISO()+'"'+(ndviDate?' value="'+ndviDate+'"':'')+' onchange="ndviSetDate(this.value)"></label>'+
     '<label class="gr-ctl"><span>Sugestões</span><select id="ndviDateSel" onchange="ndviSetDate(this.value)"><option value="">datas com imagem…</option></select></label>'+
     '<label class="gr-ctl"><span>Opacidade</span><input type="range" min="0.2" max="1" step="0.05" value="'+ndviOpacity+'" oninput="ndviSetOpacity(this.value)"></label>'+
@@ -3693,7 +3696,7 @@ function buildNdviPanel(){
     '<div class="gr-btns" style="margin:6px 0 2px"><button class="ndvi-ix'+(ndviProbe?' on':'')+'" style="flex:1" onclick="ndviToggleProbe()">'+ic('search',14)+' '+(ndviProbe?'Consultando — clique no mapa':'Consultar ponto')+'</button></div>'+
     '<div id="ndviStatus" class="ndvi-status"></div>'+
     '<div id="ndviRank" class="ndvi-rank"></div>'+
-    '<div class="gr-btns"><button class="gr-cancel" onclick="toggleNdvi()">Fechar</button></div>';
+    '<button class="ndvi-clear-btn" onclick="ndviClear()">'+ic('refresh',14)+' Remover NDVI do mapa</button>';
   p.style.display='block';
 }
 function ndviCheckProxy(){

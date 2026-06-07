@@ -1,7 +1,7 @@
 {
-  "name": "Mapa de Estudos",
-  "short_name": "Mapa de Estudos",
-  "description": "Mapa de quadras/estudos, fenologia (BBCH), avaliações por tratamento e índices de vegetação (NDVI/NDRE/GNDVI) por satélite.",
+  "name": "Agracta",
+  "short_name": "Agracta",
+  "description": "Agracta — registros de ensaios de campo: quadras/estudos, fenologia (BBCH), avaliações por tratamento, scouting e índices de vegetação (NDVI/NDRE/GNDVI) por satélite.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
