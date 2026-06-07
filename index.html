@@ -320,7 +320,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Mapa de Estudos">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=7').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=16').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -388,6 +388,56 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 .ndvi-pop-row b{color:#9ac49a}
 .gps-dot div{width:20px;height:20px;border-radius:50%;background:#2196f3;border:3px solid #fff;animation:gpspulse 1.6s infinite}
 @keyframes gpspulse{0%,100%{box-shadow:0 0 0 2px rgba(33,150,243,.5),0 0 0 5px rgba(33,150,243,.25)}50%{box-shadow:0 0 0 2px rgba(33,150,243,.5),0 0 0 15px rgba(33,150,243,0)}}
+
+/* Scouting / Notas de Campo */
+.custom-note-icon {
+  background: none !important;
+  border: none !important;
+}
+.note-pin {
+  width: 32px;
+  height: 32px;
+  border-radius: 50% 50% 50% 0;
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: rotate(-45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
+}
+.note-pin:hover {
+  transform: rotate(-45deg) scale(1.18);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.45);
+  z-index: 2000;
+}
+.note-pin svg {
+  transform: rotate(45deg);
+  width: 17px;
+  height: 17px;
+}
+.note-pop .leaflet-popup-content-wrapper, .note-pop .leaflet-popup-tip {
+  background: var(--surface, #0c140c) !important;
+  color: var(--text, #cfe) !important;
+  border: 1px solid var(--border, #2a3a2a) !important;
+  border-radius: 12px;
+  box-shadow: var(--shadow, 0 8px 30px rgba(0,0,0,.6));
+}
+.note-pop .leaflet-popup-content {
+  margin: 10px 14px;
+}
+.note-pop a.leaflet-popup-close-button {
+  color: var(--text-3, #789) !important;
+}
+.tool-note.on .tool-ico {
+  background: var(--accent, #37d684) !important;
+  color: var(--surface, #0c1110) !important;
+  box-shadow: 0 0 12px var(--accent);
+}
 </style>
 <style id="proTheme">
 /* ============================================================
@@ -732,6 +782,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .tool-clima .tool-ico{background:rgba(47,133,201,.32);color:#e0f0ff}
 .tool-measure .tool-ico{background:rgba(214,148,49,.30);color:#fff0d5}
 .tool-gps .tool-ico{background:rgba(215,90,78,.30);color:#ffe2df}
+.tool-note .tool-ico{background:rgba(142,68,173,.30);color:#f5eef8}
 
 /* Superfícies e modais */
 .panel,.edit-panel,.se-panel,.ndvi-panel,.gr-panel,.agenda-panel,.legend-panel,.main-menu,.loc-menu,.loc-box{
@@ -905,6 +956,13 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 <div class="overlay" id="dOvl" onclick="closeDetail()"><div class="panel" id="dPnl" onclick="event.stopPropagation()"></div></div>
 <div class="overlay" id="eOvl" onclick="closeEdit()"><div class="edit-panel" id="ePnl" onclick="event.stopPropagation()"></div></div>
 <div class="overlay" id="sOvl" onclick="closeStudyEdit()"><div class="edit-panel" id="sPnl" onclick="event.stopPropagation()"></div></div>
+<div class="overlay" id="noteOvl" onclick="closeNoteModal()"><div class="edit-panel" id="notePnl" onclick="event.stopPropagation()"></div></div>
+
+<div id="scoutingBanner" style="position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--surface, rgba(20,30,20,0.95));border:1px solid var(--accent, #37d684);border-radius:12px;padding:10px 16px;box-shadow:var(--shadow, 0 6px 20px rgba(0,0,0,0.5));display:none;align-items:center;gap:12px;font:600 12px system-ui,sans-serif;color:var(--text, #fff);">
+  <span>Selecione o local no mapa</span>
+  <button onclick="scoutingUseGPS()" style="background:var(--accent-soft, #1e3a1e);color:var(--accent, #8c8);border:1px solid var(--accent, #3a5a3a);padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:700;">Usar GPS</button>
+  <button onclick="toggleScoutingMode(false)" style="background:rgba(215,90,78,.15);color:var(--danger, #f88);border:1px solid var(--danger, #5a3a3a);padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:700;">Cancelar</button>
+</div>
 
 <!-- NOVOS PAINÉIS v2 -->
 <div class="sd-overlay" id="sdOvl"><div id="sdPnl"></div></div>
@@ -916,6 +974,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 <button class="tool-ndvi" onclick="toggleNdvi()" title="Camadas NDVI / NDRE / GNDVI (Sentinel-2)" aria-label="NDVI"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10a7.31 7.31 0 0 0 10 10Z"/><path d="m9 15 3-3"/><path d="M17 13a6 6 0 0 0-6-6"/><path d="M21 13A10 10 0 0 0 11 3"/></svg></span></button>
 <button class="tool-clima" onclick="toggleClima()" title="Clima ao vivo da estação meteorológica (Ecowitt)" aria-label="Clima"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v2"/><path d="m4.9 4.9 1.4 1.4"/><path d="M20 12h2"/><path d="m17.7 6.3 1.4-1.4"/><path d="M16 12a4 4 0 1 0-8 0"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/></svg></span></button>
 <button class="tool-measure" onclick="toggleMeasure()" title="Medir área no mapa ou com o GPS" aria-label="Medir"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0l-4.6-4.6a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4Z"/><path d="m7.5 10.5 2 2"/><path d="m10.5 7.5 2 2"/><path d="m13.5 4.5 2 2"/><path d="m4.5 13.5 2 2"/></svg></span></button>
+<button class="tool-note" onclick="toggleScoutingMode()" title="Registrar Observação (Nota de Campo)" aria-label="Observação"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></span></button>
 <button class="tool-gps" onclick="locateMe()" title="Mostrar minha localização (GPS)" aria-label="GPS"><span class="tool-ico"><svg class="ic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span></button>
 <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">
 </div>
@@ -1270,7 +1329,7 @@ var IMG_W=1280, IMG_H=889;
 var GEOREF_KEY="iracema-georef-v1";
 var ESTACAO_CENTER=[-22.65804,-47.52112], ESTACAO_ZOOM=16; /* Plantec Laboratórios, SP-147 km 128 */
 var SAT_MAX_ZOOM=21; /* Google chega a ~z21; Esri estica além de z19. */
-var _map=null, _qLayer=null, _baseSat=null, _geo=null;
+var _map=null, _qLayer=null, _notesLayer=null, _baseSat=null, _geo=null;
 var _grOverlay=null, _grHandles=null, _grOn=false;
 
 /* ----- Homografia (4 cantos): mapeia pixel(x,y) -> [lat,lng] de forma projetiva ----- */
@@ -1317,6 +1376,7 @@ function initMap(){
   _baseSat=_bases['Sat\u00e9lite (Google)']; _baseSat.addTo(_map);
   try{ LF.control.layers(_bases, null, { position:'topleft', collapsed:true }).addTo(_map); }catch(e){}
   _qLayer = LF.layerGroup().addTo(_map);
+  _notesLayer = LF.layerGroup().addTo(_map);
   _map.attributionControl.setPrefix('');
   try{ LF.control.scale({ metric:true, imperial:false, maxWidth:150, position:'bottomleft' }).addTo(_map); }catch(e){}
   addRotateControl();
@@ -1390,6 +1450,7 @@ function measureEnsureSubLayers(){
 function toggleMeasure(){ if(_measure.open) closeMeasure(); else openMeasure(); }
 function openMeasure(){
   if(!_map) initMap();
+  if(typeof scoutingModeActive!=='undefined'&&scoutingModeActive) toggleScoutingMode(false);
   measureCss(); measureEnsureLayer(); _measure.open=true;
   if(!document.getElementById('measurePanel')){ var p=document.createElement('div'); p.id='measurePanel'; p.className='measure-panel'; document.body.appendChild(p); }
   measureDraw();
@@ -2031,7 +2092,10 @@ function toggleQuadraEdit(){
   if(_grOn) cancelGeoref();
   editMode=!editMode; editId=null; endDraw();
   window._qEditing=editMode; /* trava o eco do realtime enquanto edita (não atropela) */
-  if(editMode){ if(!_editLayer) _editLayer=LF.layerGroup().addTo(_map); buildEditPanel(); }
+  if(editMode){
+    if(typeof scoutingModeActive!=='undefined'&&scoutingModeActive) toggleScoutingMode(false);
+    if(!_editLayer) _editLayer=LF.layerGroup().addTo(_map); buildEditPanel();
+  }
   else {
     editExitCleanup();
     /* Ao sair da edição, as alterações locais são a verdade: descarta o estado
@@ -2137,7 +2201,23 @@ var SB=null, _cloudApplying=false, _cloudTimer=null, _cloudCh=null, _cloudReady=
    (impede que um cliente recém-aberto, com dados velhos, atropele a nuvem). */
 var _cloudRev=null, _cloudInitDone=false;
 function cloudInit(){ if(SB) return SB; try{ if(window.supabase && SUPABASE_URL) SB=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }catch(e){ SB=null; } return SB; }
-function cloudState(){ ensureQGEO(); ensureLocais(); return { data:data, qgeo:QGEO, georef:_geo, locais:LOCAIS, qlocal:QLOCAL, qnome:QNOME, randomizacoes:RZLIB, _deletedQuadras:_delQuadras, _deletedLocais:_delLocais, rev:(_cloudRev||0) }; }
+function cloudState(){
+  ensureQGEO(); ensureLocais(); ensureNotas();
+  return {
+    data:data,
+    qgeo:QGEO,
+    georef:_geo,
+    locais:LOCAIS,
+    qlocal:QLOCAL,
+    qnome:QNOME,
+    randomizacoes:RZLIB,
+    _deletedQuadras:_delQuadras,
+    _deletedLocais:_delLocais,
+    notas_campo:NOTAS_CAMPO,
+    _deletedNotas:_delNotas,
+    rev:(_cloudRev||0)
+  };
+}
 /* Indicador visível de sincronização (toque = forçar sync) */
 function cloudBadge(kind,txt){
   if(!document.getElementById('cloudBadgeCss')){
@@ -2169,6 +2249,8 @@ function cloudApply(st){
     if(Array.isArray(st.randomizacoes)){ RZLIB=normalizeRZLib(st.randomizacoes); try{ localStorage.setItem(RZLIB_KEY, JSON.stringify(RZLIB)); }catch(e){} }
     if(st._deletedQuadras && typeof st._deletedQuadras==='object'){ _delQuadras=_mergeObj(_delQuadras, st._deletedQuadras); }
     if(st._deletedLocais && typeof st._deletedLocais==='object'){ _delLocais=_mergeObj(_delLocais, st._deletedLocais); }
+    if(st.notas_campo && Array.isArray(st.notas_campo)){ NOTAS_CAMPO=st.notas_campo; try{ localStorage.setItem(NOTAS_CAMPO_KEY, JSON.stringify(NOTAS_CAMPO)); }catch(e){} }
+    if(st._deletedNotas && typeof st._deletedNotas==='object'){ _delNotas=_mergeObj(_delNotas, st._deletedNotas); try{ localStorage.setItem(DELN_KEY, JSON.stringify(_delNotas)); }catch(e){} }
     saveDelTombs();
     if(QGEO){ Object.keys(QGEO).forEach(function(id){ if(!data[id]) data[id]={cultura:'',cultivar:'',plantio:'',area:null,estudos:[]}; }); }
     ensureLocais(); if(typeof buildLocalChip==='function') buildLocalChip();
@@ -2245,12 +2327,22 @@ function _mergeStudy(ls,cs){
   if(!(ls.tratamentos&&ls.tratamentos.length)&&(cs.tratamentos&&cs.tratamentos.length)) m.tratamentos=cs.tratamentos;
   return m;
 }
+function _mergeNota(la,ca){
+  var m={};
+  var k;
+  for(k in ca) m[k]=ca[k];
+  for(k in la) m[k]=la[k];
+  m.resolvido = la.resolvido || ca.resolvido;
+  if(!m.foto) m.foto = la.foto || ca.foto;
+  return m;
+}
 function cloudMerge(local,cloud){
   if(!cloud) return local; if(!local) return cloud;
   var out={};
   var delQ=_mergeObj(local._deletedQuadras,cloud._deletedQuadras)||{};
   var delL=_mergeObj(local._deletedLocais,cloud._deletedLocais)||{};
-  out._deletedQuadras=delQ; out._deletedLocais=delL;
+  var delN=_mergeObj(local._deletedNotas,cloud._deletedNotas)||{};
+  out._deletedQuadras=delQ; out._deletedLocais=delL; out._deletedNotas=delN;
   function strip(obj,tomb){ var o={},k; for(k in (obj||{})){ if(!tomb[k]) o[k]=obj[k]; } return o; }
   out.qgeo=strip(_mergeObj(local.qgeo,cloud.qgeo),delQ);
   out.qlocal=strip(_mergeObj(local.qlocal,cloud.qlocal),delQ);
@@ -2258,6 +2350,7 @@ function cloudMerge(local,cloud){
   out.locais=strip(_mergeObj(local.locais,cloud.locais),delL);
   out.randomizacoes=_mergeRZLib(local.randomizacoes,cloud.randomizacoes);
   out.georef=local.georef||cloud.georef;
+  out.notas_campo = _mergeById(local.notas_campo, cloud.notas_campo, _mergeNota, delN);
   out.data={};
   var ids={},k; for(k in (cloud.data||{}))ids[k]=1; for(k in (local.data||{}))ids[k]=1;
   Object.keys(ids).forEach(function(qid){
@@ -2514,6 +2607,7 @@ function render(){
     LF.marker(polyCentroid(latlngs),{icon:icon,interactive:false,keyboard:false}).addTo(_qLayer);
   }
   if(editMode) drawVertexHandles();
+  if(typeof renderNotas==='function') renderNotas();
 }
 
 /* ============ LEGEND (removida da UI — funções mantidas como no-op seguro) ============ */
@@ -2799,6 +2893,7 @@ function _navInitHeading(){
     else { window.addEventListener('deviceorientationabsolute',onO,true); window.addEventListener('deviceorientation',onO,true); }
   }catch(e){}
 }
+
 function navStop(){
   if(_navWatch!=null){ try{ navigator.geolocation.clearWatch(_navWatch); }catch(e){} _navWatch=null; }
   if(_navOrient){ try{ window.removeEventListener('deviceorientationabsolute',_navOrient,true); window.removeEventListener('deviceorientation',_navOrient,true); }catch(e){} _navOrient=null; }
@@ -2807,6 +2902,468 @@ function navStop(){
   _navHeading=null; _navTarget=null; _navCentered=false;
   var h=document.getElementById('navHud'); if(h) h.remove();
 }
+
+
+function deleteQuadraFromEdit(){
+  if(!curE) return;
+  var id=curE, nome=quadraNome(id);
+  requireDeletePassword('Excluir a quadra "'+nome+'" e todos os dados dela.', function(){
+    safetyBackup('antes de excluir quadra '+nome);
+    delete QGEO[id]; if(data[id]) delete data[id];
+    ensureLocais(); delete QLOCAL[id]; if(QNOME) delete QNOME[id];
+    _delQuadras[id]=Date.now(); saveDelTombs();
+    _cloudAllowShrink=true;
+    saveQLocal(); saveQNome();
+    saveQGEO(); save();
+    closeEdit();
+    if(editId===id) editId=null;
+    render();
+    if(typeof buildEditPanel==='function') buildEditPanel();
+    updateAgendaBadge();
+  });
+}
+
+/* ===== NOTAS DE CAMPO (Scouting) ===== */
+var NOTAS_CAMPO_KEY="iracema-notas-v1", DELN_KEY="iracema-deln-v1";
+var NOTAS_CAMPO=null, _delNotas=null;
+var scoutingModeActive=false;
+var _currentNoteCoords=null;
+var _tempPhotoBase64=null;
+
+function loadNotas(){
+  try{
+    var s=localStorage.getItem(NOTAS_CAMPO_KEY);
+    NOTAS_CAMPO=s?JSON.parse(s):[];
+  }catch(e){ NOTAS_CAMPO=[]; }
+  try{
+    var d=localStorage.getItem(DELN_KEY);
+    _delNotas=d?JSON.parse(d):{};
+  }catch(e){ _delNotas={}; }
+  if(!Array.isArray(NOTAS_CAMPO)) NOTAS_CAMPO=[];
+  if(!_delNotas || typeof _delNotas!=='object') _delNotas={};
+}
+
+function saveNotas(){
+  try{
+    localStorage.setItem(NOTAS_CAMPO_KEY, JSON.stringify(NOTAS_CAMPO));
+    localStorage.setItem(DELN_KEY, JSON.stringify(_delNotas));
+  }catch(e){}
+  if(typeof cloudSaveSoon==='function') cloudSaveSoon();
+}
+
+function ensureNotas(){
+  if(!NOTAS_CAMPO || !_delNotas) loadNotas();
+}
+
+function toggleScoutingMode(forceState){
+  var active=(forceState!==undefined)?forceState:!scoutingModeActive;
+  scoutingModeActive=active;
+  var btn=document.querySelector('.tool-note');
+  var banner=document.getElementById('scoutingBanner');
+  
+  if(scoutingModeActive){
+    if(typeof editMode!=='undefined' && (editMode || drawMode)){
+      _stxToast("Conclua ou cancele a edição do talhão antes.");
+      scoutingModeActive=false;
+      return;
+    }
+    if(typeof toggleNdvi==='function' && document.getElementById('ndviPanel') && document.getElementById('ndviPanel').style.display==='block'){
+      toggleNdvi();
+    }
+    if(typeof toggleClima==='function' && document.getElementById('climaPanel') && document.getElementById('climaPanel').style.display==='block'){
+      toggleClima();
+    }
+    if(typeof _measure!=='undefined' && _measure.open){
+      toggleMeasure();
+    }
+    
+    if(btn) btn.classList.add('on');
+    if(banner) banner.style.display='flex';
+    _map.getContainer().style.cursor='crosshair';
+    _stxToast("Modo Scouting: Clique no mapa para posicionar a nota");
+    _map.on('click', onMapClickScouting);
+  }else{
+    if(btn) btn.classList.remove('on');
+    if(banner) banner.style.display='none';
+    if(_map) {
+      _map.getContainer().style.cursor='';
+      _map.off('click', onMapClickScouting);
+    }
+  }
+}
+
+function onMapClickScouting(e){
+  if(!scoutingModeActive) return;
+  var lat=e.latlng.lat;
+  var lng=e.latlng.lng;
+  openNoteModal(lat, lng);
+}
+
+function scoutingUseGPS(){
+  _stxToast("Obtendo localização GPS de alta precisão…");
+  gpsBest(
+    {target:10, maxWait:8000, maxAcc:100},
+    function(b){},
+    function(b, err){
+      if(err || !b){
+        alert("Não foi possível obter a localização do GPS. Verifique a permissão do navegador.");
+        return;
+      }
+      var lat=b.lat;
+      var lng=b.lng;
+      toggleScoutingMode(false);
+      openNoteModal(lat, lng);
+    }
+  );
+}
+
+function findQuadraContaining(lat, lng){
+  var found=null;
+  ensureQGEO();
+  if(!QGEO) return null;
+  var ids=quadrasAtivas();
+  for(var i=0;i<ids.length;i++){
+    var id=ids[i];
+    var ring=QGEO[id];
+    if(!ring || ring.length<3) continue;
+    var ringXY=ring.map(function(p){ return [p[1], p[0]]; });
+    if(pointInRing(lng, lat, ringXY)){
+      found=id;
+      break;
+    }
+  }
+  return found;
+}
+
+function openNoteModal(lat, lng){
+  _tempPhotoBase64=null;
+  _currentNoteCoords={lat:lat, lng:lng};
+  var qid=findQuadraContaining(lat, lng);
+  
+  var h='<div class="edit-title">NÚCLEO REGISTRADOR</div>'+
+        '<div class="edit-id">Nova Observação</div>'+
+        '<div class="edit-subtitle">'+lat.toFixed(6)+', '+lng.toFixed(6)+(qid?' &middot; Talhão: '+quadraNome(qid):'')+'</div>';
+        
+  h+='<form id="noteForm" onsubmit="saveNoteForm(event)">'+
+     '<label class="e-lbl">TÍTULO / TÓPICO</label>'+
+     '<input type="text" id="noteTitle" class="e-inp" required placeholder="Ex: Foco de Lagarta, Deficiência de N, etc.">'+
+     
+     '<label class="e-lbl">CATEGORIA</label>'+
+     '<select id="noteCategory" class="e-inp" required style="background:#060a06;color:#ddd;border:1px solid #1e2e1e;">'+
+       '<option value="praga">🕷️ Praga</option>'+
+       '<option value="doenca">🦠 Doença</option>'+
+       '<option value="daninha">🌱 Planta Daninha</option>'+
+       '<option value="deficiencia">🧪 Deficiência Nutricional</option>'+
+       '<option value="outro">📝 Outro / Observação Geral</option>'+
+     '</select>'+
+     
+     '<label class="e-lbl">DESCRIÇÃO DETALHADA</label>'+
+     '<textarea id="noteDescription" class="e-inp" rows="4" placeholder="Descreva os sintomas, nível de severidade ou observações gerais..." style="resize:vertical;font-family:inherit;"></textarea>'+
+     
+     '<label class="e-lbl">FOTO DO CAMPO</label>'+
+     '<div style="display:flex;gap:10px;align-items:center;margin-top:4px;">'+
+       '<input type="file" id="notePhoto" accept="image/*" capture="camera" style="display:none;" onchange="handleNotePhoto(event)">'+
+       '<button type="button" onclick="document.getElementById(\'notePhoto\').click()" class="e-btn" style="background:#1a2a1a;color:#8a8;border:1px solid rgba(76,175,80,0.27);flex:none;width:auto;padding:8px 14px;">📷 Tirar Foto / Anexar</button>'+
+       '<span id="notePhotoStatus" style="font-size:11px;color:#888;">Nenhuma foto anexada</span>'+
+     '</div>'+
+     '<div id="notePhotoPreviewContainer" style="margin-top:10px;display:none;position:relative;width:120px;height:120px;border:1px solid #2a3a2a;border-radius:8px;overflow:hidden;">'+
+       '<img id="notePhotoPreview" style="width:100%;height:100%;object-fit:cover;">'+
+       '<button type="button" onclick="removeNotePhoto()" style="position:absolute;top:4px;right:4px;background:rgba(255,82,82,0.85);color:white;border:none;border-radius:50%;width:20px;height:20px;font-size:10px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>'+
+     '</div>'+
+     
+     '<div class="e-btns">'+
+       '<button type="submit" class="e-btn e-save">SALVAR NOTA</button>'+
+       '<button type="button" onclick="closeNoteModal()" class="e-btn e-cancel">CANCELAR</button>'+
+     '</div>'+
+     '</form>';
+     
+  document.getElementById("notePnl").innerHTML=h;
+  document.getElementById("noteOvl").style.display="flex";
+}
+
+function closeNoteModal(){
+  document.getElementById("noteOvl").style.display="none";
+  _currentNoteCoords=null;
+  _tempPhotoBase64=null;
+}
+
+function handleNotePhoto(event){
+  var file=event.target.files[0];
+  if(!file) return;
+  
+  var statusSpan=document.getElementById('notePhotoStatus');
+  if(statusSpan) statusSpan.textContent='Processando imagem…';
+  
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var base64=e.target.result;
+    resizeImage(base64, 800, 800, 0.75, function(resizedBase64){
+      _tempPhotoBase64=resizedBase64;
+      if(statusSpan) statusSpan.textContent='Imagem anexada ('+Math.round(resizedBase64.length/1024)+' KB)';
+      
+      var previewContainer=document.getElementById('notePhotoPreviewContainer');
+      var previewImg=document.getElementById('notePhotoPreview');
+      if(previewContainer && previewImg){
+        previewImg.src=resizedBase64;
+        previewContainer.style.display='block';
+      }
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeNotePhoto(){
+  _tempPhotoBase64=null;
+  var statusSpan=document.getElementById('notePhotoStatus');
+  if(statusSpan) statusSpan.textContent='Nenhuma foto anexada';
+  
+  var previewContainer=document.getElementById('notePhotoPreviewContainer');
+  if(previewContainer) previewContainer.style.display='none';
+  
+  var fileInput=document.getElementById('notePhoto');
+  if(fileInput) fileInput.value='';
+}
+
+function resizeImage(base64, maxWidth, maxHeight, quality, callback){
+  var img=new Image();
+  img.onload=function(){
+    var width=img.width;
+    var height=img.height;
+    
+    if(width>height){
+      if(width>maxWidth){
+        height=Math.round(height*maxWidth/width);
+        width=maxWidth;
+      }
+    }else{
+      if(height>maxHeight){
+        width=Math.round(width*maxHeight/height);
+        height=maxHeight;
+      }
+    }
+    
+    var canvas=document.createElement('canvas');
+    canvas.width=width;
+    canvas.height=height;
+    
+    var ctx=canvas.getContext('2d');
+    ctx.drawImage(img,0,0,width,height);
+    
+    var resized=canvas.toDataURL('image/jpeg', quality);
+    callback(resized);
+  };
+  img.src=base64;
+}
+
+function saveNoteForm(event){
+  if(event) event.preventDefault();
+  
+  var title=document.getElementById('noteTitle').value.trim();
+  var category=document.getElementById('noteCategory').value;
+  var description=document.getElementById('noteDescription').value.trim();
+  
+  if(!title){
+    alert("Por favor, preencha o título da nota.");
+    return;
+  }
+  
+  ensureNotas();
+  var qid=findQuadraContaining(_currentNoteCoords.lat, _currentNoteCoords.lng);
+  
+  var newNote={
+    id:"note_"+uid(),
+    lat:_currentNoteCoords.lat,
+    lng:_currentNoteCoords.lng,
+    localId:localAtivo,
+    quadraId:qid,
+    titulo:title,
+    categoria:category,
+    descricao:description,
+    foto:_tempPhotoBase64,
+    criadoEm:new Date().toISOString().split('T')[0],
+    resolvido:false
+  };
+  
+  NOTAS_CAMPO.push(newNote);
+  saveNotas();
+  closeNoteModal();
+  renderNotas();
+  _stxToast("✓ Nota de campo salva localmente!");
+}
+
+function renderNotas(){
+  if(!_map || !_notesLayer) return;
+  _notesLayer.clearLayers();
+  
+  ensureNotas();
+  
+  var activeNotes=NOTAS_CAMPO.filter(function(n){
+    return (n.localId||HOME_LOCAL)===localAtivo;
+  });
+  
+  activeNotes.forEach(function(n){
+    var color='#26a69a';
+    var iconSvg='';
+    
+    if(n.categoria==='praga'){
+      color='#ef5350';
+      iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2M5 7l1.5 1.5M19 7l-1.5 1.5M9 18l-1.5 1.5M15 18l1.5 1.5M12 6a6 6 0 0 0-6 6v3a6 6 0 0 0 12 0v-3a6 6 0 0 0-6-6zM6 12h12M12 8v8"/></svg>';
+    }else if(n.categoria==='doenca'){
+      color='#ff9800';
+      iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 3.5 1 8a7.02 7.02 0 0 1-9 10z"/><path d="M19 2c-2.26 4.33-5.27 7.14-8 10"/></svg>';
+    }else if(n.categoria==='daninha'){
+      color='#ab47bc';
+      iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V8M12 8c-2-2.5-5-2.5-7 .5 2 .5 4 1.5 7-1.5zM12 12c2.5-2 2.5-5-.5-7-.5 2-1.5 4 1 7z"/></svg>';
+    }else if(n.categoria==='deficiencia'){
+      color='#29b6f6';
+      iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></svg>';
+    }else{
+      color='#26a69a';
+      iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+    }
+    
+    if(n.resolvido){
+      color='#90a4ae';
+      iconSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+    }
+    
+    var markerHtml='<div class="note-pin'+(n.resolvido?' resolved':'')+'" style="background-color: '+color+'; color: white;">'+
+      iconSvg+
+      '</div>';
+      
+    var icon=LF.divIcon({
+      className:'custom-note-icon',
+      html:markerHtml,
+      iconSize:[32, 32],
+      iconAnchor:[16, 32]
+    });
+    
+    var marker=LF.marker([n.lat, n.lng], {icon:icon}).addTo(_notesLayer);
+    marker.bindPopup(getNotePopupHtml(n), {maxWidth:300, className:'note-pop'});
+  });
+}
+
+function getNotePopupHtml(n){
+  var catLabels={
+    praga:'🕷️ Praga',
+    doenca:'🦠 Doença',
+    daninha:'🌱 Planta Daninha',
+    deficiencia:'🧪 Deficiência',
+    outro:'📝 Geral'
+  };
+  
+  var catColors={
+    praga:'#ef5350',
+    doenca:'#ff9800',
+    daninha:'#ab47bc',
+    deficiencia:'#29b6f6',
+    outro:'#26a69a'
+  };
+  
+  var catName=catLabels[n.categoria] || 'Outro';
+  var catColor=catColors[n.categoria] || '#26a69a';
+  
+  var h='<div class="note-popup" style="font-family:-apple-system,system-ui,sans-serif;color:var(--text, #ddd);padding:2px;">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;border-bottom:1px solid var(--border, rgba(255,255,255,0.08));padding-bottom:6px;">'+
+            '<span style="font-size:10px;font-weight:700;color:'+catColor+';letter-spacing:1px;text-transform:uppercase;">'+catName+'</span>'+
+            '<span style="font-size:10px;color:var(--text-3, #888);">'+n.criadoEm+'</span>'+
+          '</div>'+
+          '<h3 style="margin:0 0 6px 0;font-size:14px;font-weight:700;color:var(--text, #fff);line-height:1.2;">'+esc(n.titulo)+'</h3>';
+          
+  if(n.quadraId){
+    h+='<div style="font-size:11px;color:var(--text-2, #aaa);margin-bottom:8px;"><b>Talhão:</b> '+esc(quadraNome(n.quadraId))+'</div>';
+  }
+  
+  if(n.descricao){
+    h+='<p style="margin:0 0 8px 0;font-size:12px;color:var(--text-2, #bbb);line-height:1.4;white-space:pre-wrap;">'+esc(n.descricao)+'</p>';
+  }
+  
+  if(n.foto){
+    h+='<div class="note-popup-img-container" style="margin-bottom:10px;border-radius:6px;overflow:hidden;border:1px solid var(--border, rgba(255,255,255,0.1));max-height:140px;cursor:pointer;" onclick="openFullPhoto(\''+n.id+'\')">'+
+         '<img src="'+n.foto+'" style="width:100%;height:100%;object-fit:cover;" title="Clique para ampliar">'+
+       '</div>';
+  }
+  
+  h+='<div style="display:flex;gap:6px;margin-top:8px;">'+
+         '<button onclick="toggleNoteResolved(\''+n.id+'\')" style="flex:1;background:var(--accent-soft, #1e3a1e);color:var(--accent, #8c8);border:1px solid var(--accent, #3a5a3a);padding:5px 8px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:bold;">'+ 
+           (n.resolvido?'Reabrir':'Marcar Resolvido')+ 
+         '</button>'+
+         '<button onclick="deleteNote(\''+n.id+'\')" style="background:rgba(215,90,78,.15);color:var(--danger, #f88);border:1px solid var(--danger, #5a3a3a);padding:5px 8px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:bold;">'+
+           'Excluir'+
+         '</button>'+
+       '</div>'+
+       '</div>';
+       
+  return h;
+}
+
+function openFullPhoto(noteId){
+  ensureNotas();
+  var n=null;
+  for(var i=0;i<NOTAS_CAMPO.length;i++){
+    if(NOTAS_CAMPO[i].id===noteId){
+      n=NOTAS_CAMPO[i];
+      break;
+    }
+  }
+  if(!n || !n.foto) return;
+  
+  var modal=document.getElementById('photoFullOvl');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='photoFullOvl';
+    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.92);display:none;align-items:center;justify-content:center;z-index:9999;cursor:pointer;';
+    modal.onclick=function(){ modal.style.display='none'; };
+    
+    var img=document.createElement('img');
+    img.id='photoFullImg';
+    img.style.cssText='max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,0.8);';
+    modal.appendChild(img);
+    
+    document.body.appendChild(modal);
+  }
+  
+  document.getElementById('photoFullImg').src=n.foto;
+  modal.style.display='flex';
+}
+
+function toggleNoteResolved(noteId){
+  ensureNotas();
+  var idx=-1;
+  for(var i=0;i<NOTAS_CAMPO.length;i++){
+    if(NOTAS_CAMPO[i].id===noteId){
+      idx=i;
+      break;
+    }
+  }
+  if(idx!==-1){
+    NOTAS_CAMPO[idx].resolvido=!NOTAS_CAMPO[idx].resolvido;
+    saveNotas();
+    renderNotas();
+    _stxToast(NOTAS_CAMPO[idx].resolvido?"✓ Observação marcada como resolvida!":"Observação reaberta.");
+  }
+}
+
+function deleteNote(noteId){
+  if(!confirm("Tem certeza que deseja excluir esta observação de campo?")) return;
+  
+  ensureNotas();
+  var idx=-1;
+  for(var i=0;i<NOTAS_CAMPO.length;i++){
+    if(NOTAS_CAMPO[i].id===noteId){
+      idx=i;
+      break;
+    }
+  }
+  if(idx!==-1){
+    _delNotas[noteId]=Date.now();
+    NOTAS_CAMPO.splice(idx,1);
+    saveNotas();
+    renderNotas();
+    _stxToast("Observação excluída.");
+  }
+}
+
 /* ===================== CLIMA — estação meteorológica (Ecowitt) ===================== */
 var CLIMA_PROXY=NDVI_PROXY;
 var _climaStations=null, climaMac=null, _climaTimer=null, _climaMode='estacao', _climaWhere=null;
@@ -2837,6 +3394,7 @@ function toggleClima(){
   var p=document.getElementById('climaPanel');
   if(p&&p.style.display==='block'){ p.style.display='none'; if(_climaTimer){clearInterval(_climaTimer);_climaTimer=null;} return; }
   var nv=document.getElementById('ndviPanel'); if(nv) nv.style.display='none';
+  if(typeof scoutingModeActive!=='undefined'&&scoutingModeActive) toggleScoutingMode(false);
   _climaCss(); buildClimaPanel(); climaModeInit();
 }
 function climaModeInit(){ if(_climaMode==='local') climaLocalLoad(); else climaInit(); }
@@ -3019,6 +3577,7 @@ function toggleNdvi(){
   var p=document.getElementById('ndviPanel');
   if(p && p.style.display==='block'){ p.style.display='none'; return; }
   var cp=document.getElementById('climaPanel'); if(cp) cp.style.display='none';
+  if(typeof scoutingModeActive!=='undefined'&&scoutingModeActive) toggleScoutingMode(false);
   if(!_map) initMap();
   ensureQGEO(); /* não bloqueia: o NDVI também funciona fora das quadras */
   if(_map && !_map.__ndviMove){ _map.__ndviMove=true; _map.on('moveend', ndviOnMove); }
@@ -3439,7 +3998,8 @@ function openE(id){
     '<label class="e-lbl">CULTURAS</label><div id="ecRows"></div>'+
     '<button type="button" class="e-add-cult" onclick="ecAddRow()">+ Adicionar cultura</button>'+
     '<label class="e-lbl">\u00c1REA (HA)'+(_medHa!=null?' <span style="color:#8aa88a;font-weight:400">\u00b7 medida do mapa: '+_medHa.toFixed(2)+'</span>':'')+'</label><input id="ea" class="e-inp" value="'+(_medHa!=null?_medHa.toFixed(2):(d.area!=null?d.area:""))+'" placeholder="'+(_medHa!=null?_medHa.toFixed(2):"1.0")+'" type="number" step="0.01">'+
-    '<div class="e-btns"><button class="e-btn e-save" onclick="saveE()">SALVAR</button><button class="e-btn e-cancel" onclick="closeEdit()">CANCELAR</button></div>';
+    '<div class="e-btns"><button class="e-btn e-save" onclick="saveE()">SALVAR</button><button class="e-btn e-cancel" onclick="closeEdit()">CANCELAR</button></div>'+
+    '<button type="button" class="e-btn-del" onclick="deleteQuadraFromEdit()">EXCLUIR QUADRA</button>';
   renderEcRows();
   document.getElementById("eOvl").classList.add("open");
 }
