@@ -1791,7 +1791,7 @@ function buildLocalChip(){
   if(!chip){ chip=document.createElement('div'); chip.id='localChip'; chip.className='loc-chip'; chip.onclick=toggleLocalMenu; host.appendChild(chip); }
   var nome=(LOCAIS[localAtivo]&&LOCAIS[localAtivo].nome)||'—';
   var n=quadrasDoLocal(localAtivo).length;
-  chip.innerHTML='<span class="loc-pin">LOC</span><b>'+esc(nome)+'</b> <span class="sub">'+n+' quadra'+(n===1?'':'s')+'</span> <span class="car">▾</span>';
+  chip.innerHTML='<b>'+esc(nome)+'</b> <span class="sub">'+n+' quadra'+(n===1?'':'s')+'</span> <span class="car">▾</span>';
 }
 function closeLocalMenu(){ var m=document.getElementById('localMenu'); if(m) m.remove(); document.removeEventListener('click', _locMenuOutside, true); }
 function _locMenuOutside(e){ var m=document.getElementById('localMenu'), c=document.getElementById('localChip'); if(m && !m.contains(e.target) && c && !c.contains(e.target)) closeLocalMenu(); }
