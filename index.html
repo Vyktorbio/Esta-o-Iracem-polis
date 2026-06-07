@@ -142,7 +142,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 .sd-overlay{position:fixed;inset:0;background:#080e08;display:none;z-index:1000;overflow-y:auto}
 .sd-overlay.open{display:block}
 .sd-panel{max-width:640px;margin:0 auto;padding:14px 14px 80px 14px;color:#d0d8d0}
-.sd-header{display:flex;align-items:center;gap:10px;position:sticky;top:0;background:#080e08;padding:8px 0 14px;border-bottom:1px solid #1a2a1a;margin-bottom:12px;z-index:2;flex-wrap:wrap}
+.sd-header{display:flex;align-items:center;gap:10px;position:sticky;top:0;background:#080e08;padding:8px 0 14px;border-bottom:1px solid #1a2a1a;margin-bottom:12px;z-index:20;flex-wrap:wrap}
 .sd-back{background:none;border:1px solid #2a3a2a;color:#8c8;padding:6px 10px;border-radius:6px;font-size:13px;cursor:pointer}
 .sd-codigo{flex:1 1 140px;min-width:0;font-size:20px;font-weight:700;color:#afa;letter-spacing:0.3px;overflow-wrap:anywhere;line-height:1.15}
 .sd-actions{display:flex;gap:6px}
@@ -3148,6 +3148,19 @@ function buildStudyRecord(qid,s){
         });
       }
     }); }
+  /* Resultados: media & % de controle por avaliacao + AUDPC (colavel na planilha) */
+  var _test=studyTestemunha(s), _avsR=s.avaliacoes.slice().sort(byData).filter(function(a){return a.variaveis&&a.variaveis.length;});
+  if(_avsR.length){
+    L.push(''); L.push('RESULTADOS - media e % de controle (testemunha: '+_test+')'); L.push('Data\tVariavel\tTrat\tMedia\t% controle');
+    _avsR.forEach(function(a){ var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ var tm=m[_test]&&m[_test][v];
+      s.tratamentos.forEach(function(t){ var mv=m[t.id]&&m[t.id][v]; var ctrl=(t.id===_test)?'testemunha':((tm!=null&&tm>0&&mv!=null)?(_r1((tm-mv)/tm*100)+'%'):'');
+        L.push((isoToBR(a.data)||'')+'\t'+v+'\t'+t.id+'\t'+(mv!=null?_r1(mv):'')+'\t'+ctrl); }); }); });
+    var _bv={}; _avsR.forEach(function(a){ if(!a.data)return; var m=_avMeans(s,a); (a.variaveis||[]).forEach(function(v){ (_bv[v]=_bv[v]||[]).push({date:a.data,m:m}); }); });
+    var _aud=[]; Object.keys(_bv).forEach(function(v){ var pts=_bv[v]; if(pts.length<2)return; var t0=new Date(pts[0].date), days=pts.map(function(p){return Math.max(0,Math.round((new Date(p.date)-t0)/864e5));});
+      function audf(tr){ var ss=0,prev=null,pt=null; for(var i=0;i<pts.length;i++){ var y=pts[i].m[tr]&&pts[i].m[tr][v]; if(y==null)return null; if(prev!=null)ss+=(prev+y)/2*(days[i]-pt); prev=y; pt=days[i]; } return ss; }
+      var ta=audf(_test); s.tratamentos.forEach(function(t){ var a=audf(t.id); var ctrl=(t.id===_test)?'testemunha':((ta!=null&&ta>0&&a!=null)?(_r1((ta-a)/ta*100)+'%'):''); _aud.push(v+'\t'+t.id+'\t'+(a!=null?Math.round(a):'')+'\t'+ctrl); }); });
+    if(_aud.length){ L.push(''); L.push('AUDPC (vs testemunha: '+_test+')'); L.push('Variavel\tTrat\tAUDPC\t% controle'); _aud.forEach(function(x){L.push(x);}); }
+  }
   var ds=[]; if(s.dataInicio)ds.push(s.dataInicio);
   (s.aplicacoes||[]).forEach(function(a){ if(a.data)ds.push(a.data); });
   (s.avaliacoes||[]).forEach(function(a){ if(a.data)ds.push(a.data); });
