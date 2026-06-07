@@ -320,7 +320,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=17').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=19').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -4257,6 +4257,24 @@ function saveStudy(){
   var q = data[curS]||{};
   if(!Array.isArray(q.estudos))q.estudos=[];
   var idx = q.estudos.findIndex(function(x){return x.id===s.id});
+
+  var action = '';
+  var details = '';
+  if(idx>=0) {
+    action = 'Alteração do Estudo';
+    var old = q.estudos[idx];
+    var changes = [];
+    if(old.nome !== s.nome) changes.push('Nome: "' + old.nome + '" -> "' + s.nome + '"');
+    if(old.dataInicio !== s.dataInicio) changes.push('Início: ' + old.dataInicio + ' -> ' + s.dataInicio);
+    if(old.numAplicacoes !== s.numAplicacoes) changes.push('Nº Apls: ' + old.numAplicacoes + ' -> ' + s.numAplicacoes);
+    if(old.intervaloDias !== s.intervaloDias) changes.push('Intervalo: ' + old.intervaloDias + ' -> ' + s.intervaloDias);
+    details = changes.length ? changes.join(', ') : 'Alterado via V1 editor';
+  } else {
+    action = 'Criação do Estudo';
+    details = 'Nome: "' + s.nome + '" (V1)';
+  }
+  logStudyAuditInObject(s, action, details);
+
   if(idx>=0)q.estudos[idx]=s; else q.estudos.push(s);
   data[curS]=q;
   save();
@@ -4632,7 +4650,8 @@ function newStudy(){
     avalIntervalo:7,
     avalNum:0,
     randomizado:false,
-    randomizacao:null
+    randomizacao:null,
+    audit:[]
   };
 }
 
@@ -4679,7 +4698,50 @@ function normalizeStudy(s){
       return a;
     });
   }else s.avaliacoes=[];
+  if(!Array.isArray(s.audit)) s.audit=[];
   return s;
+}
+
+function logStudyAuditInObject(study, action, details) {
+  if(!study) return;
+  if(!Array.isArray(study.audit)) study.audit = [];
+  var userEmail = (typeof _authUser !== 'undefined' && _authUser && _authUser.email) ? _authUser.email : 'Local/Offline';
+  study.audit.push({
+    ts: Date.now(),
+    user: userEmail,
+    action: action,
+    details: details
+  });
+}
+
+function studyAuditHtml(study){
+  var s = study;
+  if(!s.audit || !s.audit.length) {
+    return '<div class="sd-section">' +
+      '<div class="sd-section-title">🛡️ Trilha de Auditoria BPL</div>' +
+      '<div class="sd-empty" style="color:var(--text-3,#8aa88a)">Nenhum registro de auditoria gravado ainda.</div>' +
+      '</div>';
+  }
+  
+  var html = '<div class="sd-section">' +
+    '<div class="sd-section-title">🛡️ Trilha de Auditoria BPL</div>' +
+    '<div style="background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);border-radius:12px;padding:12px;max-height:250px;overflow-y:auto;display:flex;flex-direction:column;gap:8px">';
+    
+  s.audit.slice().reverse().forEach(function(entry){
+    var dt = new Date(entry.ts);
+    var dateStr = isNaN(dt.getTime()) ? '?' : dt.toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit'});
+    html += '<div style="border-bottom:1px solid var(--border,#26322b);padding-bottom:6px;font-size:11px;line-height:1.45">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">' +
+        '<span style="color:var(--accent,#37d684);font-weight:700">' + esc(entry.action) + '</span>' +
+        '<span style="color:var(--text-3,#7c8a80);font-size:10px">' + dateStr + '</span>' +
+      '</div>' +
+      '<div style="color:var(--text,#e8efe9);word-break:break-word">' + esc(entry.details) + '</div>' +
+      '<div style="color:var(--text-2,#9fb1a5);font-size:9px;margin-top:1px;font-style:italic">Por: ' + esc(entry.user) + '</div>' +
+      '</div>';
+  });
+  
+  html += '</div></div>';
+  return html;
 }
 
 /* Modelos padrao importados de Randomizacoes_ordem_final.xlsx.
@@ -5072,6 +5134,7 @@ function openStudyDetail(qid,sid){
   h+='</div>';
   h+=studyAudpcHtml(study);
   h+=studyChartsHtml(study);
+  h+=studyAuditHtml(study);
 
   /* Botão excluir estudo */
   h+='<div class="sd-danger-zone"><button class="btn-danger" onclick="confirmDeleteStudy(\''+qid+'\',\''+sid+'\')">Excluir estudo</button></div>';
@@ -5203,8 +5266,11 @@ function removeAplicacao(id){
   requireDeletePassword('Remover esta aplicação registrada.', function(){
     safetyBackup('antes de excluir aplicação');
     var q=data[qid],study=(q.estudos||[]).find(function(s){return s.id===sid});
+    var ap=study.aplicacoes.find(function(a){return a.id===id});
+    var details = ap ? ('Data: ' + ap.data + (ap.bbch ? ' (BBCH ' + ap.bbch + ')' : '')) : 'ID: ' + id;
     _markDeleted(study,'_deletedAplicacoes',id);
     study.aplicacoes=study.aplicacoes.filter(function(a){return a.id!==id});
+    logStudyAuditInObject(study, 'Remoção de Aplicação', details);
     save();
     openStudyDetail(qid,sid);
   });
@@ -5215,8 +5281,11 @@ function removeAvaliacaoV2(id){
   requireDeletePassword('Remover esta avaliação e os resultados preenchidos nela.', function(){
     safetyBackup('antes de excluir avaliação');
     var q=data[qid],study=(q.estudos||[]).find(function(s){return s.id===sid});
+    var av=study.avaliacoes.find(function(a){return a.id===id});
+    var details = av ? ('Data: ' + av.data + (av.tipo ? ' (' + av.tipo + ')' : '')) : 'ID: ' + id;
     _markDeleted(study,'_deletedAvaliacoes',id);
     study.avaliacoes=study.avaliacoes.filter(function(a){return a.id!==id});
+    logStudyAuditInObject(study, 'Remoção de Avaliação', details);
     save();
     openStudyDetail(qid,sid);
   });
@@ -5396,6 +5465,27 @@ function saveStudyV2(){
   var q=data[curV];
   if(!q.estudos)q.estudos=[];
   var idx=q.estudos.findIndex(function(x){return x.id===s.id});
+
+  var action = '';
+  var details = '';
+  if(idx>=0) {
+    action = 'Alteração do Estudo';
+    var old = q.estudos[idx];
+    var changes = [];
+    if(old.codigo !== s.codigo) changes.push('Código: "' + old.codigo + '" -> "' + s.codigo + '"');
+    if(old.descricao !== s.descricao) changes.push('Descrição alterada');
+    if(old.dataInicio !== s.dataInicio) changes.push('Início: ' + old.dataInicio + ' -> ' + s.dataInicio);
+    if(old.numAplicacoes !== s.numAplicacoes) changes.push('Nº Apls: ' + old.numAplicacoes + ' -> ' + s.numAplicacoes);
+    if(old.intervaloDias !== s.intervaloDias) changes.push('Intervalo: ' + old.intervaloDias + ' -> ' + s.intervaloDias);
+    if(old.numRepeticoes !== s.numRepeticoes) changes.push('Repetições: ' + old.numRepeticoes + ' -> ' + s.numRepeticoes);
+    if(JSON.stringify(old.tratamentos) !== JSON.stringify(s.tratamentos)) changes.push('Tratamentos/Protocolo modificados');
+    details = changes.length ? changes.join(', ') : 'Nenhuma alteração nos campos principais';
+  } else {
+    action = 'Criação do Estudo';
+    details = 'Código: "' + s.codigo + '", ' + s.tratamentos.length + ' tratamentos, ' + s.numRepeticoes + ' repetições.';
+  }
+  logStudyAuditInObject(s, action, details);
+
   if(idx>=0)q.estudos[idx]=s;
   else q.estudos.push(s);
 
@@ -5439,11 +5529,53 @@ function openStudyEditAplicacao(aid){
     });
     h+='</select></div>';
   }
+  var weatherHtml = '<div id="aeWeatherAlert" style="margin-bottom:12px;padding:10px;border-radius:10px;background:var(--surface-2,#0c1210);border:1px solid var(--border,#26322b);font-size:12px;line-height:1.45">' +
+    'Obtendo condições meteorológicas atuais para janela BPL…' +
+    '</div>';
+  h+=weatherHtml;
   h+='<div class="se-field"><label>Observações</label><textarea id="aeObs" rows="4" placeholder="Condições climáticas, produtos, ocorrências...">'+esc(ap.obs||"")+'</textarea></div>';
   h+='<div class="se-actions"><button class="btn-save" onclick="saveAplicacao()">SALVAR</button><button class="btn-cancel" onclick="closeEventEdit()">Cancelar</button></div>';
 
   document.getElementById("eePnl").innerHTML=h;
   window._avEditing=true; document.getElementById("eeOvl").classList.add("open");
+  
+  _carimboClima(curV, function(cl){
+    var el = document.getElementById('aeWeatherAlert');
+    if(!el) return;
+    if(!cl){
+      el.innerHTML = '<span style="color:#dccd8c">⚠️ Não foi possível obter o clima atual para avaliar a janela de pulverização.</span>';
+      return;
+    }
+    var temp = cl.temp;
+    var rh = cl.umidade;
+    var wind = cl.vento;
+    
+    var tempOk = (temp != null && temp < 30);
+    var rhOk = (rh != null && rh > 50);
+    var windOk = (wind != null && wind < 10);
+    var allOk = tempOk && rhOk && windOk;
+    
+    var html = '';
+    if(allOk){
+      html += '<div style="display:flex;align-items:center;gap:8px;color:#37d684;font-weight:700">';
+      html += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#37d684;box-shadow:0 0 8px #37d684"></span>';
+      html += 'Janela de Pulverização Ideal (BPL)';
+      html += '</div>';
+    } else {
+      html += '<div style="display:flex;align-items:center;gap:8px;color:#ff6b6b;font-weight:700">';
+      html += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ff6b6b;box-shadow:0 0 8px #ff6b6b"></span>';
+      html += 'Fora da Janela de Pulverização BPL';
+      html += '</div>';
+    }
+    
+    html += '<div style="margin-top:5px;font-size:11px;color:var(--text-3,#8aa88a);display:flex;flex-wrap:wrap;gap:8px">';
+    html += '<span>Temp: <strong style="color:'+(tempOk?'#eaf3ed':'#ff6b6b')+'">'+(temp != null ? temp.toFixed(1)+'°C' : '—')+'</strong></span>';
+    html += '<span>UR: <strong style="color:'+(rhOk?'#eaf3ed':'#ff6b6b')+'">'+(rh != null ? Math.round(rh)+'%' : '—')+'</strong></span>';
+    html += '<span>Vento: <strong style="color:'+(windOk?'#eaf3ed':'#ff6b6b')+'">'+(wind != null ? wind.toFixed(1)+' km/h' : '—')+'</strong></span>';
+    html += '</div>';
+    
+    el.innerHTML = html;
+  });
 }
 
 /* ===================== AUTO-CARIMBO (data/hora + GPS + clima + NDVI no registro) ===================== */
@@ -5532,7 +5664,15 @@ function carimboHtml(c){
     if(cl.vpd!=null)s+=' · '+ic('gauge',12)+'VPD '+(Math.round(cl.vpd*100)/100);
     if(cl.vento!=null)s+=' · '+ic('wind',12)+(Math.round(cl.vento*10)/10)+'km/h';
     if(cl.chuva!=null)s+=' · '+ic('rain',12)+(Math.round(cl.chuva*10)/10)+'mm';
-    p.push(s+' ('+(cl.fonte==='estacao'?'estação':'previsão')+')'); }
+    
+    var tempOk = (cl.temp != null && cl.temp < 30);
+    var rhOk = (cl.umidade != null && cl.umidade > 50);
+    var windOk = (cl.vento != null && cl.vento < 10);
+    var bplBadge = (cl.temp != null && cl.umidade != null && cl.vento != null)
+      ? (tempOk && rhOk && windOk ? ' <span style="color:#37d684;font-weight:700">🟢 Janela Ideal BPL</span>' : ' <span style="color:#ff6b6b;font-weight:700">🔴 Fora da Janela</span>')
+      : '';
+      
+    p.push(s+' ('+(cl.fonte==='estacao'?'estação':'previsão')+')' + bplBadge); }
   if(c.ndvi&&c.ndvi.ndvi!=null) p.push(ic('sat',12)+' NDVI '+(Math.round(c.ndvi.ndvi*100)/100)+(c.ndvi.ndre!=null?' · NDRE '+(Math.round(c.ndvi.ndre*100)/100):'')+(c.ndvi.data?' ('+esc(c.ndvi.data)+')':''));
   if(c.gps) p.push(ic('pin',12)+' '+c.gps.lat.toFixed(5)+', '+c.gps.lng.toFixed(5)+(c.gps.acc?' ±'+Math.round(c.gps.acc)+'m':''));
   else if(c.centro&&c.centro.length===2) p.push(ic('pin',12)+' '+c.centro[0].toFixed(5)+', '+c.centro[1].toFixed(5)+' (centro)');
@@ -5547,15 +5687,32 @@ function saveAplicacao(){
   var isNew=(editingAplId==="__new__");
   var ap=isNew?draftAp:study.aplicacoes.find(function(a){return a.id===editingAplId});
   if(!ap)return;
+  var oldData = ap.data;
+  var oldBBCH = ap.bbch;
+  var oldObs = ap.obs;
   ap.data=document.getElementById("aeData").value;
   var bbchEl=document.getElementById("aeBBCH");
   ap.bbch=bbchEl?bbchEl.value:"";
   ap.obs=document.getElementById("aeObs").value.trim();
+  
+  var action = isNew ? 'Registro de Aplicação' : 'Edição de Aplicação';
+  var details = '';
+  if(isNew) {
+    details = 'APL registrada para a data ' + ap.data + (ap.bbch ? ' (BBCH ' + ap.bbch + ')' : '');
+  } else {
+    var changes = [];
+    if(oldData !== ap.data) changes.push('Data: ' + oldData + ' -> ' + ap.data);
+    if(oldBBCH !== ap.bbch) changes.push('BBCH: ' + oldBBCH + ' -> ' + ap.bbch);
+    if(oldObs !== ap.obs) changes.push('Obs alteradas');
+    details = changes.length ? changes.join(', ') : 'Nenhuma alteração de conteúdo';
+  }
+  
   if(isNew){
     study.aplicacoes.push(ap);
     draftAp=null;
   }
   if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl');
+  logStudyAuditInObject(study, action, details);
   save();
   closeEventEdit();
   openStudyDetail(curV,curSid);
@@ -5613,6 +5770,41 @@ function _avCss(){ if(document.getElementById('avCss'))return; var s=document.cr
   document.head.appendChild(s);
 }
 function _avTrats(){ var q=data[curV]||{}, st=(q.estudos||[]).find(function(s){return s.id===curSid;}); return (st&&st.tratamentos)||[]; }
+
+function avValidateCell(inp){
+  var v=inp.getAttribute('data-v');
+  if(!v) {
+    var a= (typeof _avAutoState === 'function') ? _avAutoState() : null;
+    v = a ? a.v : null;
+  }
+  if(!v) return;
+  var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+  var val=inp.value.trim();
+  if(val==='') return;
+  var num=parseFloat(val.replace(',','.'));
+  if(isNaN(num)){
+    inp.value='';
+    _stxToast('Valor inválido. Digite um número.');
+    return;
+  }
+  if(tp==='pct'){
+    if(num<0){
+      num=0;
+      _stxToast('Valor menor que 0% ajustado para 0%.');
+    } else if(num>100){
+      num=100;
+      _stxToast('Valor maior que 100% ajustado para 100%.');
+    }
+    inp.value=String(num);
+  } else {
+    if(num<0){
+      num=0;
+      _stxToast('Valor negativo ajustado para 0.');
+    }
+    inp.value=String(Math.floor(num));
+  }
+}
+
 function renderAvGrid(){
   _avCss(); var w=document.getElementById('avGridWrap'); if(!w) return;
   var st=_avStudy(), rows=_avRowsForStudy(st,false), ts=(st&&st.tratamentos)||[];
@@ -5640,9 +5832,9 @@ function renderAvGrid(){
       var val=(row[v]!=null&&row[v]!=='')?row[v]:((old&&old[v]!=null)?old[v]:'');
       var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
       if(tp==='contagem'){
-        html+='<td><div class="av-cellwrap"><button type="button" class="av-step" onclick="avBump(this,-1)">−</button><input class="av-cell" data-t="'+esc(rw.key)+'" data-v="'+esc(v)+'" value="'+esc(val)+'" inputmode="numeric"><button type="button" class="av-step" onclick="avBump(this,1)">+</button></div></td>';
+        html+='<td><div class="av-cellwrap"><button type="button" class="av-step" onclick="avBump(this,-1)">−</button><input class="av-cell" data-t="'+esc(rw.key)+'" data-v="'+esc(v)+'" value="'+esc(val)+'" inputmode="numeric" onblur="avValidateCell(this)"><button type="button" class="av-step" onclick="avBump(this,1)">+</button></div></td>';
       } else {
-        html+='<td><input class="av-cell av-cell-num" data-t="'+esc(rw.key)+'" data-v="'+esc(v)+'" value="'+esc(val)+'" inputmode="decimal" placeholder="%"></td>';
+        html+='<td><input class="av-cell av-cell-num" data-t="'+esc(rw.key)+'" data-v="'+esc(v)+'" value="'+esc(val)+'" inputmode="decimal" placeholder="%" onblur="avValidateCell(this)"></td>';
       }
     });
     html+='<td></td></tr>';
@@ -5651,24 +5843,50 @@ function renderAvGrid(){
   if(!vs.length) html+='<div class="av-gridbtns"><button type="button" class="av-addcol" onclick="avAddCol()">+ coluna (ex.: Puccinia)</button></div>';
   w.innerHTML=html;
 }
+
 function _avSyncInputs(){
   var w=document.getElementById('avGridWrap'); if(!w) return;
   Array.prototype.forEach.call(w.querySelectorAll('.av-cell'), function(inp){
     var t=inp.getAttribute('data-t'), v=inp.getAttribute('data-v');
     if(!_avGrid.notas[t]) _avGrid.notas[t]={};
+    
+    var val = inp.value.trim();
+    if(val !== '') {
+      var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+      var num = parseFloat(val.replace(',', '.'));
+      if(isNaN(num)) {
+        val = '';
+        inp.value = '';
+      } else {
+        if(tp==='pct'){
+          if(num<0) num=0;
+          if(num>100) num=100;
+        } else {
+          if(num<0) num=0;
+          num = Math.floor(num);
+        }
+        val = String(num);
+        inp.value = val;
+      }
+    }
+    
     var old=(_avGrid.notas[t][v]==null?'':String(_avGrid.notas[t][v]));
-    if(old!==String(inp.value)){
-      _avGrid.notas[t][v]=inp.value;
+    if(old!==String(val)){
+      _avGrid.notas[t][v]=val;
       _avTouchCell(t,v);
     }
   });
 }
+
 function avBump(el,delta){
   var inp=el.parentNode.querySelector('.av-cell'); if(!inp) return;
   var n=parseFloat(inp.value); if(isNaN(n)) n=0; n+=delta; if(n<0) n=0;
   inp.value=(n%1===0)?String(n):n.toFixed(1);
+  avValidateCell(inp);
 }
+
 function _avAutoRows(){ return _avRowsForStudy(_avStudy(),true); }
+
 function _avAutoState(){
   var rows=_avAutoRows(), vars=_avGrid.variaveis||[], total=rows.length*vars.length;
   if(total<=0) return null;
@@ -5677,7 +5895,25 @@ function _avAutoState(){
   var ri=Math.floor(_avAuto.pos/vars.length), vi=_avAuto.pos%vars.length;
   return {rows:rows,vars:vars,total:total,vi:vi,ri:ri,row:rows[ri],v:vars[vi],tipo:((_avGrid.tipos||{})[vars[vi]]==='contagem'?'contagem':'pct')};
 }
+
 function _avSetCell(key,v,val){
+  if(val !== '' && val != null) {
+    var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
+    var num = parseFloat(String(val).replace(',', '.'));
+    if(isNaN(num)) {
+      val = '';
+    } else {
+      if(tp==='pct'){
+        if(num<0) num=0;
+        if(num>100) num=100;
+      } else {
+        if(num<0) num=0;
+        num = Math.floor(num);
+      }
+      val = String(num);
+    }
+  }
+
   if(!_avGrid.notas[key]) _avGrid.notas[key]={};
   var old=(_avGrid.notas[key][v]==null?'':String(_avGrid.notas[key][v]));
   if(old!==String(val)){
@@ -5689,6 +5925,7 @@ function _avSetCell(key,v,val){
     if(inp.getAttribute('data-t')===key && inp.getAttribute('data-v')===v) inp.value=val;
   });
 }
+
 function renderAvAutoBox(){
   var st=_avStudy(), rows=_avAutoRows(), vars=_avGrid.variaveis||[];
   if(!vars.length) return '<div class="av-auto-box"><div class="av-hint">Adicione pelo menos uma coluna de avaliação para usar o modo automático.</div></div>';
@@ -5699,8 +5936,8 @@ function renderAvAutoBox(){
   var locLabel=(a.row.parcela?('Parcela '+a.row.parcela):(a.row.campo||a.row.label||a.row.tratId+_repDisplay(a.row.rep)));
   var rowInfo=a.row.tratId+' · rep '+(a.row.repDisplay||_repDisplay(a.row.rep));
   var input=a.tipo==='contagem'
-    ? '<div class="av-auto-count"><button type="button" onclick="avAutoBump(-1)">−</button><input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="numeric" oninput="avAutoWrite(this.value)"><button type="button" onclick="avAutoBump(1)">+</button></div>'
-    : '<input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="decimal" oninput="avAutoWrite(this.value)" placeholder="%">';
+    ? '<div class="av-auto-count"><button type="button" onclick="avAutoBump(-1)">−</button><input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="numeric" oninput="avAutoWrite(this.value)" onblur="avValidateCell(this)"><button type="button" onclick="avAutoBump(1)">+</button></div>'
+    : '<input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="decimal" oninput="avAutoWrite(this.value)" onblur="avValidateCell(this)" placeholder="%">';
   return '<div class="av-auto-box">'+
     '<div class="av-auto-top"><span>'+esc(locLabel)+'</span><span>parc '+(a.ri+1)+'/'+rows.length+' · var '+(a.vi+1)+'/'+vars.length+'</span></div>'+
     '<div class="av-auto-card"><div><div class="av-auto-main">'+esc(a.v)+'</div><div class="av-auto-sub">'+esc((st&&st.codigo?st.codigo+' · ':'')+rowInfo+prod)+'</div></div>'+input+'</div>'+
@@ -5938,6 +6175,13 @@ function saveAvaliacao(){
   var isNew=(editingAvId==="__new__");
   var av=isNew?draftAv:study.avaliacoes.find(function(a){return a.id===editingAvId});
   if(!av)return;
+  
+  var oldData=av.data;
+  var oldTipo=av.tipo;
+  var oldBBCH=av.bbch;
+  var oldObs=av.obs;
+  var oldNotas = JSON.parse(JSON.stringify(av.notas || {}));
+  
   av.data=document.getElementById("vData").value;
   av.tipo=document.getElementById("vTipo").value;
   var bbchEl=document.getElementById("vBBCH");
@@ -5945,11 +6189,44 @@ function saveAvaliacao(){
   av.obs=document.getElementById("vObs").value.trim();
   var autoInp=document.getElementById('avAutoInput'); if(autoInp) avAutoWrite(autoInp.value);
   _avSyncInputs(); av.variaveis=_avGrid.variaveis.slice(); av.notas=_avGrid.notas; av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
+  
+  var action = isNew ? 'Registro de Avaliação' : 'Edição de Avaliação';
+  var details = '';
+  if(isNew) {
+    details = 'AV registrada para a data ' + av.data + (av.tipo ? ' (' + av.tipo + ')' : '') + (av.bbch ? ' [BBCH ' + av.bbch + ']' : '');
+  } else {
+    var changes = [];
+    if(oldData !== av.data) changes.push('Data: ' + oldData + ' -> ' + av.data);
+    if(oldTipo !== av.tipo) changes.push('Tipo: ' + oldTipo + ' -> ' + av.tipo);
+    if(oldBBCH !== av.bbch) changes.push('BBCH: ' + oldBBCH + ' -> ' + av.bbch);
+    if(oldObs !== av.obs) changes.push('Obs alteradas');
+    
+    var notesChanged = false;
+    var keys = Object.keys(Object.assign({}, oldNotas, av.notas));
+    for(var k=0; k<keys.length; k++){
+      var key = keys[k];
+      var oRow = oldNotas[key] || {};
+      var nRow = av.notas[key] || {};
+      var vkeys = Object.keys(Object.assign({}, oRow, nRow));
+      for(var v=0; v<vkeys.length; v++){
+        var vk = vkeys[v];
+        if(String(oRow[vk]||'') !== String(nRow[vk]||'')) {
+          notesChanged = true;
+          break;
+        }
+      }
+      if(notesChanged) break;
+    }
+    if(notesChanged) changes.push('Notas das parcelas atualizadas');
+    details = changes.length ? changes.join(', ') : 'Nenhuma alteração de conteúdo';
+  }
+  
   if(isNew){
     study.avaliacoes.push(av);
     draftAv=null;
   }
   if(!av.carimbo) carimbar(curV,curSid,av.id,'aval');
+  logStudyAuditInObject(study, action, details);
   save();
   closeEventEdit();
   openStudyDetail(curV,curSid);
