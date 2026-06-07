@@ -369,6 +369,9 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 .ndvi-clear-btn{width:100%;margin-top:8px;padding:11px;border-radius:10px;border:1px solid #3a4a42;background:#17231d;color:#cfe0d4;font-size:12.5px;font-weight:800;letter-spacing:.3px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:7px}
 .ndvi-clear-btn:hover{background:#1f2e26;border-color:#4a5a52;color:#eafaf0}
 .ndvi-clear-btn:active{transform:translateY(1px)}
+.ndvi-zona-btn{width:100%;margin:2px 0 4px;padding:9px;border-radius:9px;border:1px solid #2a3a2a;background:#111811;color:#9ac49a;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px}
+.ndvi-zona-btn.on{background:#1e3a1e;color:#bdf0bd;border-color:#3a5a3a}
+.ndvi-zona-btn:active{transform:translateY(1px)}
 .ndvi-ix.on{background:#1e3a1e;color:#bdf0bd;border-color:#3a5a3a}
 .ndvi-legend{display:flex;align-items:center;gap:6px;font-size:9px;color:#789;margin:8px 0 2px}
 .ndvi-bar{flex:1;height:9px;border-radius:3px;background:linear-gradient(90deg,#6a4524,#a8431f,#e6732f,#f2d959,#9bc24a,#59b745,#1d7a25,#0a4d14)}
@@ -2666,13 +2669,14 @@ function render(){
     var hasAlert=quadraHasAlert(id);
     var isEd=(editMode && id===editId);
 
-    var poly=LF.polygon(latlngs,{className:'q-poly',color:isEd?'#ffce00':ac,weight:isEd?3:2,opacity:0.95,fillColor:ac,fillOpacity:isEd?0.18:0.08,interactive:(!drawMode && !ndviProbe && !(_measure&&_measure.mode==='draw'))});
-    (function(qid){
+    var _zona=(ndviZonas && ndviMeans && ndviMeans[id]!=null), _zc=_zona?_ndviColor(ndviMeans[id]):ac, _zfo=isEd?0.18:(_zona?0.62:0.08);
+    var poly=LF.polygon(latlngs,{className:'q-poly',color:isEd?'#ffce00':_zc,weight:isEd?3:2,opacity:0.95,fillColor:_zc,fillOpacity:_zfo,interactive:(!drawMode && !ndviProbe && !(_measure&&_measure.mode==='draw'))});
+    (function(qid,zfo,zona){
       if(!drawMode){
         poly.on('click',function(){ if(_measure&&_measure.mode==='draw') return; if(editMode) selectQuadra(qid); else showD(qid); });
-        if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:0.25,weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:0.08,weight:2});}); }
+        if(!editMode){ poly.on('mouseover',function(){this.setStyle({fillOpacity:zona?0.8:0.25,weight:3});}); poly.on('mouseout',function(){this.setStyle({fillOpacity:zfo,weight:2});}); }
       }
-    })(id);
+    })(id,_zfo,_zona);
     poly.addTo(_qLayer);
     if(isEd) _editPoly=poly;
 
@@ -2779,7 +2783,10 @@ function updateAgendaBadge(){
 /* ============ DETAIL PANEL ============ */
 /* ===== NDVI / NDRE / GNDVI (Sentinel-2 via proxy local) ===== */
 var NDVI_PROXY=(location.hostname==='localhost'||location.hostname==='127.0.0.1')?'http://localhost:8799':'https://ndvi-iracemapolis.onrender.com';
-var ndviIndex=null, ndviDate=null, ndviOverlay=null, ndviOpacity=0.78, ndviClip=true, ndviMeans=null;
+var ndviIndex=null, ndviDate=null, ndviOverlay=null, ndviOpacity=0.78, ndviClip=true, ndviMeans=null, ndviZonas=false;
+function _lerpColor(a,b,t){ function h(s,i){return parseInt(s.substr(i,2),16);} function c(x){x=Math.max(0,Math.min(255,Math.round(x)));return (x<16?'0':'')+x.toString(16);} return '#'+c(h(a,1)+(h(b,1)-h(a,1))*t)+c(h(a,3)+(h(b,3)-h(a,3))*t)+c(h(a,5)+(h(b,5)-h(a,5))*t); }
+function _ndviColor(v){ if(v==null||isNaN(v)) return '#9e9e9e'; var s=[[0.15,'#d73027'],[0.3,'#fc8d59'],[0.45,'#fee08b'],[0.6,'#d9ef8b'],[0.75,'#91cf60'],[0.85,'#1a9850']]; if(v<=s[0][0])return s[0][1]; if(v>=s[s.length-1][0])return s[s.length-1][1]; for(var i=1;i<s.length;i++){ if(v<=s[i][0]) return _lerpColor(s[i-1][1],s[i][1],(v-s[i-1][0])/(s[i][0]-s[i-1][0])); } return s[s.length-1][1]; }
+function ndviToggleZonas(){ if(!ndviZonas && !ndviMeans){ if(typeof _stxToast==='function')_stxToast('Carregue um índice (NDVI/NDRE…) primeiro'); return; } ndviZonas=!ndviZonas; if(ndviOverlay){ try{ ndviOverlay.setOpacity(ndviZonas?0.12:ndviOpacity); }catch(e){} } render(); if(document.getElementById('ndviPanel')&&document.getElementById('ndviPanel').style.display==='block') buildNdviPanel(); }
 /* NDVI usa sempre a área visível do mapa; o checkbox "Apenas quadras" liga/desliga o recorte. */
 var _ndviMoveT=null;
 function pointInRing(x,y,ring){ var inside=false,i,j;
@@ -3734,6 +3741,7 @@ function buildNdviPanel(){
   function btn(ix,label){ return '<button class="ndvi-ix'+(ndviIndex===ix?' on':'')+'" onclick="ndviSetIndex(\''+ix+'\')">'+(label||ix)+'</button>'; }
   p.innerHTML='<div class="gr-head"><div class="gr-title">'+ic('sat',14)+' ÍNDICES (Sentinel-2)</div><button class="gr-x" onclick="toggleNdvi()" aria-label="Fechar" title="Fechar">×</button></div>'+
     '<div class="ndvi-ixrow">'+btn('NDVI')+btn('NDRE')+btn('GNDVI')+btn('NDMI')+'</div>'+
+    '<button class="ndvi-zona-btn'+(ndviZonas?' on':'')+'" onclick="ndviToggleZonas()">'+ic('sat',13)+' '+(ndviZonas?'Zonamento ligado (quadras coloridas)':'Colorir quadras por valor (zonamento)')+'</button>'+
     '<label class="gr-ctl"><span>Data</span><input type="date" id="ndviDateInput" max="'+todayISO()+'"'+(ndviDate?' value="'+ndviDate+'"':'')+' onchange="ndviSetDate(this.value)"></label>'+
     '<label class="gr-ctl"><span>Sugestões</span><select id="ndviDateSel" onchange="ndviSetDate(this.value)"><option value="">datas com imagem…</option></select></label>'+
     '<label class="gr-ctl"><span>Opacidade</span><input type="range" min="0.2" max="1" step="0.05" value="'+ndviOpacity+'" oninput="ndviSetOpacity(this.value)"></label>'+
