@@ -4938,7 +4938,7 @@ function _avAutoState(){
   if(total<=0) return null;
   if(_avAuto.pos<0)_avAuto.pos=0;
   if(_avAuto.pos>=total)_avAuto.pos=total-1;
-  var vi=Math.floor(_avAuto.pos/rows.length), ri=_avAuto.pos%rows.length;
+  var ri=Math.floor(_avAuto.pos/vars.length), vi=_avAuto.pos%vars.length;
   return {rows:rows,vars:vars,total:total,vi:vi,ri:ri,row:rows[ri],v:vars[vi],tipo:((_avGrid.tipos||{})[vars[vi]]==='contagem'?'contagem':'pct')};
 }
 function _avSetCell(key,v,val){
@@ -4959,15 +4959,15 @@ function renderAvAutoBox(){
   if(!rows.length) return '<div class="av-auto-box"><div class="av-hint">Cadastre tratamentos e repetições para usar o modo automático.</div></div>';
   var a=_avAutoState(); if(!a)return '';
   var val=(_avGrid.notas[a.row.key]&&_avGrid.notas[a.row.key][a.v]!=null)?_avGrid.notas[a.row.key][a.v]:'';
-  var parcela=(a.row.parcela?('Parcela '+a.row.parcela+' · '):''), prod=a.row.produto?(' · '+a.row.produto):'';
-  var mainLabel=a.row.campo||a.row.label||a.row.tratId+_repDisplay(a.row.rep);
+  var prod=a.row.produto?(' · '+a.row.produto):'';
+  var locLabel=(a.row.parcela?('Parcela '+a.row.parcela):(a.row.campo||a.row.label||a.row.tratId+_repDisplay(a.row.rep)));
   var rowInfo=a.row.tratId+' · rep '+(a.row.repDisplay||_repDisplay(a.row.rep));
   var input=a.tipo==='contagem'
     ? '<div class="av-auto-count"><button type="button" onclick="avAutoBump(-1)">−</button><input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="numeric" oninput="avAutoWrite(this.value)"><button type="button" onclick="avAutoBump(1)">+</button></div>'
     : '<input id="avAutoInput" class="av-auto-input" value="'+esc(val)+'" inputmode="decimal" oninput="avAutoWrite(this.value)" placeholder="%">';
   return '<div class="av-auto-box">'+
-    '<div class="av-auto-top"><span>'+esc(a.v)+'</span><span>'+(a.vi+1)+'/'+vars.length+' · '+(a.ri+1)+'/'+rows.length+'</span></div>'+
-    '<div class="av-auto-card"><div><div class="av-auto-main">'+esc(parcela+mainLabel)+'</div><div class="av-auto-sub">'+esc((st&&st.codigo?st.codigo+' · ':'')+rowInfo+prod)+'</div></div>'+input+'</div>'+
+    '<div class="av-auto-top"><span>'+esc(locLabel)+'</span><span>parc '+(a.ri+1)+'/'+rows.length+' · var '+(a.vi+1)+'/'+vars.length+'</span></div>'+
+    '<div class="av-auto-card"><div><div class="av-auto-main">'+esc(a.v)+'</div><div class="av-auto-sub">'+esc((st&&st.codigo?st.codigo+' · ':'')+rowInfo+prod)+'</div></div>'+input+'</div>'+
     '<div class="av-auto-nav"><button type="button" onclick="avAutoStep(-1)">Anterior</button><button type="button" onclick="avAutoStep(1)">Salvar e próximo</button></div>'+
   '</div>';
 }
@@ -5333,13 +5333,15 @@ function exportXlsx(soDoLocal){
 function _buildXlsx(soDoLocal){
   var XLSX=window.XLSX;
   function num(x){ return (x==null||x==='')?'':x; }
+  function toNum(x){ if(x==null||x==='') return ''; if(typeof x==='number') return isFinite(x)?x:''; var s=String(x).trim().replace(',','.'); if(s==='') return ''; var n=Number(s); return isFinite(n)?n:String(x); }
   function dap(pl,when){ try{ if(!pl||!when) return ''; var p=new Date(pl), w=new Date(when); if(isNaN(p)||isNaN(w)) return ''; return Math.round((w-p)/864e5); }catch(e){ return ''; } }
-  var tidyH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Data_avaliacao','DAP_dias','Tipo','BBCH','Parcela','Tratamento','Repeticao','Produto','Dose','Volume_calda','Variavel','Valor','Obs_avaliacao','Registrado_em','Clima_fonte','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI','NDRE','Lat','Lng'];
+  var tidyH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Data_avaliacao','DAP_dias','Tipo','BBCH','Parcela','Tratamento','Repeticao','Produto','Dose','Volume_calda','Variavel','Tipo_variavel','Valor','Obs_avaliacao','Registrado_em','Clima_fonte','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI','NDRE','Lat','Lng'];
   var aplH=['Local','Quadra','Cultura','Estudo','Data_aplicacao','BBCH','Obs','Registrado_em','Temp_C','UR_pct','VPD_kPa','Vento_kmh','Chuva_mm','NDVI'];
-  var estH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Inicio','N_aplicacoes','Intervalo_dias','Repeticoes','N_tratamentos','N_parcelas','Area_ha','Comprimento_m','Largura_m','Lat','Lng'];
+  var estH=['Local','Quadra','Cultura','Cultivar','Plantio','Estudo','Descricao','Inicio','N_aplicacoes','Intervalo_dias','Repeticoes','N_tratamentos','N_parcelas','Testemunha','N_avaliacoes','Area_ha','Comprimento_m','Largura_m','Lat','Lng'];
   var eficH=['Local','Quadra','Estudo','Variavel','Data_avaliacao','Tratamento','Produto','Testemunha','Media','%_controle'];
   var audH=['Local','Quadra','Estudo','Variavel','Tratamento','Produto','Testemunha','N_datas','Dias','AUDPC','%_controle'];
-  var tidy=[tidyH], apl=[aplH], est=[estH], efic=[eficH], aud=[audH];
+  var tratH=['Local','Quadra','Estudo','Tratamento','Produto','Dose','Volume_calda','Obs','Testemunha'];
+  var tidy=[tidyH], apl=[aplH], est=[estH], trat=[tratH], efic=[eficH], aud=[audH];
   Object.keys(data).forEach(function(qid){
     var q=data[qid]; if(!q||!Array.isArray(q.estudos)||!q.estudos.length) return;
     if(soDoLocal && ((QLOCAL&&QLOCAL[qid])||HOME_LOCAL)!==localAtivo) return;
@@ -5347,19 +5349,19 @@ function _buildXlsx(soDoLocal){
     var plant=q.plantio||'', plantBR=isoToBR(plant)||'';
     q.estudos.forEach(function(s){
       s=normalizeStudy(s);
-      est.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(s.dataInicio)||'',s.numAplicacoes,s.intervaloDias,s.numRepeticoes,s.tratamentos.length,s.tratamentos.length*s.numRepeticoes,aHa!=null?+aHa.toFixed(3):'',dim?Math.round(dim.comprimento):'',dim?Math.round(dim.largura):'',ctr?+ctr[0].toFixed(6):'',ctr?+ctr[1].toFixed(6):'']);
-      var prod={},dose={},vol={}; s.tratamentos.forEach(function(t){ prod[t.id]=t.produto||''; dose[t.id]=t.dose||''; vol[t.id]=t.volume||''; });
+      est.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(s.dataInicio)||'',s.numAplicacoes,s.intervaloDias,s.numRepeticoes,s.tratamentos.length,s.tratamentos.length*s.numRepeticoes,studyTestemunha(s),(s.avaliacoes||[]).length,aHa!=null?+aHa.toFixed(3):'',dim?Math.round(dim.comprimento):'',dim?Math.round(dim.largura):'',ctr?+ctr[0].toFixed(6):'',ctr?+ctr[1].toFixed(6):'']);
+      var prod={},dose={},vol={}, _tst=studyTestemunha(s); s.tratamentos.forEach(function(t){ prod[t.id]=t.produto||''; dose[t.id]=t.dose||''; vol[t.id]=t.volume||''; trat.push([locNome,qn,s.codigo||'',t.id,t.produto||'',t.dose||'',t.volume||'',t.obs||'',(t.id===_tst?'sim':'')]); });
       s.aplicacoes.forEach(function(a){ var c=a.carimbo||{}, cl=c.clima||{};
-        apl.push([locNome,qn,q.cultura||'',s.codigo||'',isoToBR(a.data)||'',a.bbch||'',a.obs||'',c.data||'',num(cl.temp),num(cl.umidade),num(cl.vpd),num(cl.vento),num(cl.chuva),(c.ndvi&&c.ndvi.ndvi!=null)?c.ndvi.ndvi:'']); });
+        apl.push([locNome,qn,q.cultura||'',s.codigo||'',isoToBR(a.data)||'',a.bbch||'',a.obs||'',c.data||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),(c.ndvi&&c.ndvi.ndvi!=null)?toNum(c.ndvi.ndvi):'']); });
       s.avaliacoes.forEach(function(a){ var c=a.carimbo||{}, cl=c.clima||{}, vars=a.variaveis||[];
-        var lat=c.gps?+c.gps.lat.toFixed(6):(c.centro&&c.centro.length===2?+c.centro[0].toFixed(6):''), lng=c.gps?+c.gps.lng.toFixed(6):(c.centro&&c.centro.length===2?+c.centro[1].toFixed(6):'');
+        var lat=(c.gps&&c.gps.lat!=null)?+c.gps.lat.toFixed(6):(c.centro&&c.centro.length===2?+c.centro[0].toFixed(6):''), lng=(c.gps&&c.gps.lng!=null)?+c.gps.lng.toFixed(6):(c.centro&&c.centro.length===2?+c.centro[1].toFixed(6):'');
         var ndvi=(c.ndvi&&c.ndvi.ndvi!=null)?c.ndvi.ndvi:'', ndre=(c.ndvi&&c.ndvi.ndre!=null)?c.ndvi.ndre:'', dapv=dap(plant,a.data);
         if(vars.length && s.tratamentos.length){
           _avRowsForStudy(s,false).forEach(function(rw){
-            vars.forEach(function(v){ tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'',rw.campo||'',rw.tratId,rw.repDisplay||_repDisplay(rw.rep),prod[rw.tratId]||'',dose[rw.tratId]||'',vol[rw.tratId]||'',v,num(_avNota(a,rw,v)),a.obs||'',c.data||'',cl.fonte||'',num(cl.temp),num(cl.umidade),num(cl.vpd),num(cl.vento),num(cl.chuva),ndvi,ndre,lat,lng]); });
+            vars.forEach(function(v){ tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'',rw.campo||'',rw.tratId,rw.repDisplay||_repDisplay(rw.rep),prod[rw.tratId]||'',dose[rw.tratId]||'',vol[rw.tratId]||'',v,(((a.tipos||{})[v]==='contagem')?'contagem':'numero/%'),toNum(_avNota(a,rw,v)),a.obs||'',c.data||'',cl.fonte||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),toNum(ndvi),toNum(ndre),lat,lng]); });
           });
         } else {
-          tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'','','','','','','','','',a.obs||'',c.data||'',cl.fonte||'',num(cl.temp),num(cl.umidade),num(cl.vpd),num(cl.vento),num(cl.chuva),ndvi,ndre,lat,lng]);
+          tidy.push([locNome,qn,q.cultura||'',q.cultivar||'',plantBR,s.codigo||'',s.descricao||'',isoToBR(a.data)||'',dapv,a.tipo||'',a.bbch||'','','','','','','','','','',a.obs||'',c.data||'',cl.fonte||'',toNum(cl.temp),toNum(cl.umidade),toNum(cl.vpd),toNum(cl.vento),toNum(cl.chuva),toNum(ndvi),toNum(ndre),lat,lng]);
         }
       });
       (function(){ var _t=studyTestemunha(s), _av=s.avaliacoes.slice().sort(function(a,b){return (a.data||'').localeCompare(b.data||'');}).filter(function(a){return a.variaveis&&a.variaveis.length;});
@@ -5372,14 +5374,13 @@ function _buildXlsx(soDoLocal){
   if(tidy.length<=1 && est.length<=1){ alert('Não há estudos para exportar'+(soDoLocal?' neste local.':'.')); return; }
   function widths(h){ return h.map(function(x){ return { wch: Math.min(Math.max(String(x).length+2, 9), 30) }; }); }
   var wb=XLSX.utils.book_new();
-  var wsD=XLSX.utils.aoa_to_sheet(tidy); wsD['!cols']=widths(tidyH);
-  var wsA=XLSX.utils.aoa_to_sheet(apl); wsA['!cols']=widths(aplH);
-  var wsE=XLSX.utils.aoa_to_sheet(est); wsE['!cols']=widths(estH);
-  XLSX.utils.book_append_sheet(wb, wsD, 'Dados');
-  XLSX.utils.book_append_sheet(wb, wsA, 'Aplicacoes');
-  XLSX.utils.book_append_sheet(wb, wsE, 'Estudos');
-  if(efic.length>1){ var wsF=XLSX.utils.aoa_to_sheet(efic); wsF['!cols']=widths(eficH); XLSX.utils.book_append_sheet(wb, wsF, 'Eficacia'); }
-  if(aud.length>1){ var wsAu=XLSX.utils.aoa_to_sheet(aud); wsAu['!cols']=widths(audH); XLSX.utils.book_append_sheet(wb, wsAu, 'AUDPC'); }
+  function addSheet(name,arr,H){ if(arr.length<=1) return; var ws=XLSX.utils.aoa_to_sheet(arr); ws['!cols']=widths(H); ws['!autofilter']={ref:'A1:'+XLSX.utils.encode_col(H.length-1)+arr.length}; XLSX.utils.book_append_sheet(wb, ws, name); }
+  addSheet('Dados', tidy, tidyH);
+  addSheet('Tratamentos', trat, tratH);
+  addSheet('Aplicacoes', apl, aplH);
+  addSheet('Estudos', est, estH);
+  addSheet('Eficacia', efic, eficH);
+  addSheet('AUDPC', aud, audH);
   XLSX.writeFile(wb, 'ensaios-'+todayISO()+'.xlsx');
 }
 function importData(ev){
