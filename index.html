@@ -4737,18 +4737,18 @@ function _carimboTSV(c){
 function carimboHtml(c){
   if(!c) return '';
   var p=[];
-  if(c.data) p.push('📅 '+esc(c.data));
-  if(c.clima){ var cl=c.clima, s='🌡️ '+(cl.temp!=null?(Math.round(cl.temp*10)/10)+'°C':'—');
-    if(cl.umidade!=null)s+=' · 💧'+Math.round(cl.umidade)+'%';
-    if(cl.vpd!=null)s+=' · VPD '+(Math.round(cl.vpd*100)/100);
-    if(cl.vento!=null)s+=' · 🌬️'+(Math.round(cl.vento*10)/10)+'km/h';
-    if(cl.chuva!=null)s+=' · 🌧️'+(Math.round(cl.chuva*10)/10)+'mm';
+  if(c.data) p.push(ic('calendar',12)+' '+esc(c.data));
+  if(c.clima){ var cl=c.clima, s=ic('thermo',12)+' '+(cl.temp!=null?(Math.round(cl.temp*10)/10)+'°C':'—');
+    if(cl.umidade!=null)s+=' · '+ic('droplet',12)+Math.round(cl.umidade)+'%';
+    if(cl.vpd!=null)s+=' · '+ic('gauge',12)+'VPD '+(Math.round(cl.vpd*100)/100);
+    if(cl.vento!=null)s+=' · '+ic('wind',12)+(Math.round(cl.vento*10)/10)+'km/h';
+    if(cl.chuva!=null)s+=' · '+ic('rain',12)+(Math.round(cl.chuva*10)/10)+'mm';
     p.push(s+' ('+(cl.fonte==='estacao'?'estação':'previsão')+')'); }
-  if(c.ndvi&&c.ndvi.ndvi!=null) p.push('🛰️ NDVI '+(Math.round(c.ndvi.ndvi*100)/100)+(c.ndvi.ndre!=null?' · NDRE '+(Math.round(c.ndvi.ndre*100)/100):'')+(c.ndvi.data?' ('+esc(c.ndvi.data)+')':''));
-  if(c.gps) p.push('📍 '+c.gps.lat.toFixed(5)+', '+c.gps.lng.toFixed(5)+(c.gps.acc?' ±'+Math.round(c.gps.acc)+'m':''));
-  else if(c.centro&&c.centro.length===2) p.push('📍 '+c.centro[0].toFixed(5)+', '+c.centro[1].toFixed(5)+' (centro)');
+  if(c.ndvi&&c.ndvi.ndvi!=null) p.push(ic('sat',12)+' NDVI '+(Math.round(c.ndvi.ndvi*100)/100)+(c.ndvi.ndre!=null?' · NDRE '+(Math.round(c.ndvi.ndre*100)/100):'')+(c.ndvi.data?' ('+esc(c.ndvi.data)+')':''));
+  if(c.gps) p.push(ic('pin',12)+' '+c.gps.lat.toFixed(5)+', '+c.gps.lng.toFixed(5)+(c.gps.acc?' ±'+Math.round(c.gps.acc)+'m':''));
+  else if(c.centro&&c.centro.length===2) p.push(ic('pin',12)+' '+c.centro[0].toFixed(5)+', '+c.centro[1].toFixed(5)+' (centro)');
   if(!p.length) return '';
-  return '<div style="font-size:10px;color:#8aa88a;margin-top:5px;line-height:1.6;border-top:1px dashed #2a3a2a;padding-top:5px">'+p.join(' · ')+'</div>';
+  return '<div style="font-size:11px;color:#5a6b61;margin-top:6px;line-height:1.8;border-top:1px dashed #d2dcd5;padding-top:6px">'+p.join(' · ')+'</div>';
 }
 
 function saveAplicacao(){
