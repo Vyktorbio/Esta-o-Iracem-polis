@@ -2148,23 +2148,24 @@ function toggleFullscreenMap(){
   } else if(ex){ ex.style.display='none'; }
   setTimeout(function(){ try{ if(_map) _map.invalidateSize(); }catch(e){} }, 160);
 }
+function isAdmin(){ try{ var c=data&&data.__config; return !!(c && c.adminEmail && _authUser && _authUser.email && _authUser.email.toLowerCase().trim()===String(c.adminEmail).toLowerCase().trim()); }catch(e){ return false; } }
 function toggleMainMenu(){
   if(document.getElementById('mainMenu')){ closeMainMenu(); return; }
   _menuCss();
   var m=document.createElement('div'); m.id='mainMenu'; m.className='main-menu';
+  var adm=isAdmin();
   m.innerHTML=
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">'+ic('pencil')+' Editar quadras</button>'+
-    '<button onclick="closeMainMenu();startGeoref()">'+ic('pin')+' Alinhar mapa</button>'+
+    (adm?'<button onclick="closeMainMenu();startGeoref()">'+ic('pin')+' Alinhar mapa</button>':'')+
     '<div class="mm-sep"></div>'+
-    '<button onclick="closeMainMenu();exportXlsx(false)">'+ic('sheet')+' Exportar planilha (Excel/Sheets)</button>'+
-    '<div class="mm-sep"></div>'+
+    (adm?'<button onclick="closeMainMenu();exportXlsx(false)">'+ic('sheet')+' Exportar planilha (Excel/Sheets)</button><div class="mm-sep"></div>':'')+
     '<button onclick="closeMainMenu();exportData()">'+ic('save')+' Backup (arquivo)</button>'+
     '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">'+ic('download')+' Importar</button>'+
     '<button onclick="closeMainMenu();openBackups()">'+ic('archive')+' Backups (restaurar)</button>'+
     '<button onclick="closeMainMenu();openCloudHistory()">'+ic('refresh')+' Histórico da nuvem</button>'+
     '<button onclick="closeMainMenu();openIntegridade()">'+ic('search')+' Verificar integridade</button>'+
-    '<button onclick="closeMainMenu();openAdminPanel()">'+ic('gear')+' Painel Admin</button>'+
+    (adm?'<button onclick="closeMainMenu();openAdminPanel()">'+ic('gear')+' Painel Admin</button>':'')+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
   document.body.appendChild(m);
   /* abre logo abaixo do botão ☰ (canto superior direito) */
