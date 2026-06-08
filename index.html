@@ -2154,6 +2154,7 @@ function toggleMainMenu(){
   _menuCss();
   var m=document.createElement('div'); m.id='mainMenu'; m.className='main-menu';
   var adm=isAdmin();
+  var _ig=0; try{ _ig=(typeof integridadeScan==='function')?integridadeScan().length:0; }catch(e){}
   m.innerHTML=
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">'+ic('pencil')+' Editar quadras</button>'+
@@ -2164,7 +2165,7 @@ function toggleMainMenu(){
     '<button onclick="closeMainMenu();document.getElementById(\'imp\').click()">'+ic('download')+' Importar</button>'+
     '<button onclick="closeMainMenu();openBackups()">'+ic('archive')+' Backups (restaurar)</button>'+
     '<button onclick="closeMainMenu();openCloudHistory()">'+ic('refresh')+' Histórico da nuvem</button>'+
-    '<button onclick="closeMainMenu();openIntegridade()">'+ic('search')+' Verificar integridade</button>'+
+    '<button onclick="closeMainMenu();openIntegridade()">'+ic('search')+' Verificar integridade'+(_ig?' ('+_ig+')':'')+'</button>'+
     (adm?'<button onclick="closeMainMenu();openAdminPanel()">'+ic('gear')+' Painel Admin</button>':'')+
     (_authUser?('<div class="mm-sep"></div><div class="mm-user">'+esc(_authUser.email||'')+'</div><button onclick="doLogout()">'+ic('logout')+' Sair</button>'):'');
   document.body.appendChild(m);
@@ -6080,6 +6081,11 @@ function _avAutoState(){
 
 /* AUTOSAVE da avaliação: comita o rascunho (_avGrid) na avaliação real + grava JÁ no localStorage
    (e nuvem, debounce) a cada célula — não perde se fechar/cair/acabar a bateria antes do SALVAR. */
+var _avCloudTimer=null;
+function _avCloudSoon(){ /* nuvem com FOLGA: no máximo 1 gravação a cada ~15s durante a edição (poupa bateria/dados) */
+  if(_avCloudTimer) return;
+  _avCloudTimer=setTimeout(function(){ _avCloudTimer=null; try{ if(typeof cloudSave==='function') cloudSave(); }catch(e){} }, 15000);
+}
 function _avPersistNow(){
   try{
     var q=data[curV]; if(!q) return;
@@ -6097,7 +6103,9 @@ function _avPersistNow(){
     var vo=document.getElementById('vObs'); if(vo) av.obs=vo.value.trim();
     if(typeof _avSyncInputs==='function') _avSyncInputs();
     av.variaveis=(_avGrid.variaveis||[]).slice(); av.notas=_avGrid.notas; av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
-    if(typeof save==='function') save();
+    try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} /* durável no aparelho NA HORA, sem rede */
+    if(typeof setUnsavedChanges==='function') setUnsavedChanges(true);
+    _avCloudSoon(); /* nuvem com folga (poupa bateria) — junta várias células numa gravação */
   }catch(e){}
 }
 function _avSetCell(key,v,val){
@@ -6439,6 +6447,7 @@ function saveAvaliacao(){
 
 function closeEventEdit(){
   document.getElementById("eeOvl").classList.remove("open");
+  try{ if(_avCloudTimer){ clearTimeout(_avCloudTimer); _avCloudTimer=null; } if(_unsavedChanges && typeof cloudSave==='function') cloudSave(); }catch(e){} /* ao fechar a avaliação, descarrega o autosave pra nuvem (checkpoint) */
   editingAplId=null;editingAvId=null;
   draftAp=null;draftAv=null;
   window._avEditing=false;
