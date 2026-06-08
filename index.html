@@ -320,7 +320,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=29').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=30').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -2288,7 +2288,7 @@ var SB=null, _cloudApplying=false, _cloudTimer=null, _cloudCh=null, _cloudReady=
 /* _cloudRev: revisão monotônica do documento (evita aplicar/empurrar estado mais antigo).
    _cloudInitDone: só permite ESCREVER na nuvem DEPOIS de ter LIDO ela uma vez
    (impede que um cliente recém-aberto, com dados velhos, atropele a nuvem). */
-var _cloudRev=null, _cloudInitDone=false;
+var _cloudRev=null, _cloudInitDone=false, _cloudWatchdog=null;
 var _unsavedChanges=false;
 try{ _unsavedChanges=(localStorage.getItem('iracema-unsaved')==='true'); }catch(e){}
 function setUnsavedChanges(val){
@@ -2495,8 +2495,14 @@ function _cloudSaveAttempt(allowShrink, replace, tries){
   if(!cloudInit()){ cloudBadge('error'); window._cloudSavingActive=false; return; }
   var localState=cloudState();
   window._cloudSavingActive=true;
+  /* WATCHDOG: se a requisição travar (sinal cai no campo e a conexão estola sem resolver nem rejeitar),
+     destrava sozinho em ~15s em vez de deixar o botão Salvar morto pra sempre. Os dados continuam no
+     aparelho (localStorage); isto só liberta o checkpoint pra nuvem. Cada etapa de rede renova a janela. */
+  function _armWd(){ clearTimeout(_cloudWatchdog); _cloudWatchdog=setTimeout(function(){ if(window._cloudSavingActive){ window._cloudSavingActive=false; cloudBadge('error','— toque p/ tentar'); } }, (window._cloudWdMs||15000)); }
+  _armWd();
   try{
     SB.from('app_state').select('state').eq('id',1).single().then(function(res){
+      _armWd(); /* select voltou: renova a janela p/ a etapa de update */
       var cs = res && res.data && res.data.state;
       var cRev = (cs && cs.rev!=null) ? cs.rev : 0;
       var toSave = (replace || !cs) ? localState : cloudMerge(localState, cs);
