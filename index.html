@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=32').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=33').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -4047,8 +4047,8 @@ function buildStudyRecord(qid,s){
   add('Area (ha)', aHa!=null?aHa.toFixed(2):''); if(dim) add('Dimensoes C x L (m)', Math.round(dim.comprimento)+' x '+Math.round(dim.largura));
   if(ctr) add('Coordenadas (lat, lng)', ctr[0].toFixed(6)+', '+ctr[1].toFixed(6));
   function byData(a,b){ return (a.data||'').localeCompare(b.data||''); }
-  if(s.tratamentos.length){ L.push(''); L.push('TRATAMENTOS'); L.push('#\tProduto\tDose\tV.Calda\tObs');
-    s.tratamentos.forEach(function(t){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t'+(t.volume||'')+'\t'+(t.obs||'')); }); }
+  if(s.tratamentos.length){ L.push(''); L.push('TRATAMENTOS'); L.push('#\tProduto\tDose\tV.Calda\tTestemunha\tObs');
+    s.tratamentos.forEach(function(t){ L.push((t.id||'')+'\t'+(t.produto||'')+'\t'+(t.dose||'')+'\t'+(t.volume||'')+'\t'+(isTestemunha(s,t.id)?(studyTestemunha(s)===t.id?'sim (ref)':'sim'):'')+'\t'+(t.obs||'')); }); }
   if(s.aplicacoes.length){ L.push(''); L.push('APLICACOES'); L.push('Data\tBBCH\tObs');
     s.aplicacoes.slice().sort(byData).forEach(function(a){ L.push((isoToBR(a.data)||'')+'\t'+(a.bbch||'')+'\t'+(a.obs||'')); var ct=_carimboTSV(a.carimbo); if(ct)L.push(ct); }); }
   if(s.avaliacoes.length){ L.push(''); L.push('AVALIACOES'); L.push('Data\tTipo\tBBCH\tObs');
@@ -4063,6 +4063,22 @@ function buildStudyRecord(qid,s){
         });
       }
     }); }
+  /* MATRIZ tratamento x repeticao (colavel direto no Excel): linhas=tratamentos, colunas=repeticoes */
+  var _avsM=s.avaliacoes.slice().sort(byData).filter(function(a){return a.variaveis&&a.variaveis.length;});
+  if(_avsM.length){
+    L.push(''); L.push('MATRIZ DE RESULTADOS (tratamento x repeticao)');
+    _avsM.forEach(function(a){ (a.variaveis||[]).forEach(function(v){
+      L.push(''); L.push(v+'  ·  '+(isoToBR(a.data)||'')+(a.tipo?('  ·  '+a.tipo):''));
+      var reps=Math.max(1,parseInt(s.numRepeticoes)||1), hdr='Trat';
+      for(var r=1;r<=reps;r++) hdr+='\t'+_repLetter(r);
+      L.push(hdr);
+      (s.tratamentos||[]).forEach(function(t){
+        var line=t.id+(isTestemunha(s,t.id)?' (test.)':'');
+        for(var r=1;r<=reps;r++){ var val=_avNota(a,{key:_avRowKey(t.id,r),tratId:t.id,rep:r},v); line+='\t'+(val==null?'':val); }
+        L.push(line);
+      });
+    }); });
+  }
   /* Resultados: media & % de controle por avaliacao + AUDPC (colavel na planilha) */
   var _test=studyTestemunha(s), _avsR=s.avaliacoes.slice().sort(byData).filter(function(a){return a.variaveis&&a.variaveis.length;});
   if(_avsR.length){
@@ -4858,6 +4874,9 @@ function normalizeStudy(s){
   if(!Array.isArray(s.tratamentos))s.tratamentos=[];
   if(typeof s.numRepeticoes!=="number")s.numRepeticoes=parseInt(s.numRepeticoes)||4;
   if(typeof s.testemunha!=="string")s.testemunha="";
+  /* Testemunhas múltiplas: flag por tratamento (t.testemunha). Migra a testemunha primária antiga. */
+  s.tratamentos.forEach(function(t){ if(t) t.testemunha=!!t.testemunha; });
+  if(s.testemunha){ var _pt=s.tratamentos.find(function(t){return t&&t.id===s.testemunha;}); if(_pt) _pt.testemunha=true; }
   if(typeof s.avalInicio!=="string")s.avalInicio="";
   if(typeof s.avalIntervalo!=="number")s.avalIntervalo=parseInt(s.avalIntervalo)||7;
   if(typeof s.avalNum!=="number")s.avalNum=parseInt(s.avalNum)||0;
@@ -5559,9 +5578,9 @@ function renderStudyEditModal(){
   h+='<div class="se-field"><label>Repetições por tratamento</label><input type="number" id="seReps" value="'+s.numRepeticoes+'" min="1" max="10" style="width:80px"></div>';
   h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px"><input type="checkbox" id="seRandomizado" '+(s.randomizado?'checked':'')+' style="width:auto"> Estudo randomizado</label><div class="e-hint">Usa automaticamente a ordem randomizada de parcelas para o número de tratamentos e repetições deste protocolo.</div></div>';
 
-  h+='<div class="se-field"><label>Testemunha (controle)</label><select id="seTestemunha">'+
+  h+='<div class="se-field"><label>Testemunha de referência (% controle)</label><select id="seTestemunha">'+
      (s.tratamentos.length? s.tratamentos.map(function(t){ return '<option value="'+esc(t.id)+'"'+(studyTestemunha(s)===t.id?' selected':'')+'>'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+'</option>'; }).join('') : '<option value="">— cadastre os tratamentos primeiro —</option>')+
-     '</select><div class="e-hint">Base do % de controle e da AUDPC (geralmente a sem tratamento).</div></div>';
+     '</select><div class="e-hint">Base do % de controle e da AUDPC (a sem aplicação). Pode marcar <b>Testemunha</b> em mais de um tratamento abaixo (ex.: testemunha + padrão).</div></div>';
   h+='<div id="seTratList">';
   if(s.tratamentos.length===0){
     h+='<div class="se-empty">Nenhum tratamento. Clique em + para adicionar.</div>';
@@ -5572,6 +5591,7 @@ function renderStudyEditModal(){
       h+='<input type="text" placeholder="Produto" data-f="produto" value="'+esc(t.produto)+'">';
       h+='<div style="display:flex;gap:6px"><input type="text" placeholder="Dose" data-f="dose" value="'+esc(t.dose)+'" style="flex:1"><input type="text" placeholder="V. Calda" data-f="volume" value="'+esc(t.volume)+'" style="flex:1"></div>';
       h+='<input type="text" placeholder="Observações (opcional)" data-f="obs" value="'+esc(t.obs)+'">';
+      h+='<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#a8c4b0;text-transform:none;letter-spacing:0;margin-top:3px;cursor:pointer"><input type="checkbox" data-f="testemunha" '+(t.testemunha?'checked':'')+' style="width:auto"> Testemunha / check</label>';
       h+='</div>';
     });
   }
@@ -5626,7 +5646,7 @@ function syncTratInputs(){
     var t=workingStudy.tratamentos[idx];
     el.querySelectorAll("input").forEach(function(inp){
       var f=inp.getAttribute("data-f");
-      if(f)t[f]=inp.value;
+      if(f)t[f]=(inp.type==='checkbox')?inp.checked:inp.value;
     });
   });
 }
@@ -5853,7 +5873,7 @@ function _carimboTSV(c){
   if(c.ndvi&&c.ndvi.ndvi!=null) p.push('NDVI '+c.ndvi.ndvi+(c.ndvi.ndre!=null?' NDRE '+c.ndvi.ndre:'')+(c.ndvi.data?' ('+c.ndvi.data+')':''));
   var ll=c.gps?(c.gps.lat+','+c.gps.lng):(c.centro&&c.centro.length===2?(c.centro[0]+','+c.centro[1]):'');
   if(ll) p.push('GPS '+ll);
-  return p.length?('  carimbo\t'+p.join(' | ')):'';
+  return p.length?('  carimbo\t'+p.join('\t')):'';
 }
 function carimboHtml(c){
   if(!c) return '';
@@ -6280,6 +6300,9 @@ function avGridHtml(a){
 }
 /* ===== Análise: testemunha selecionável, % de controle e AUDPC ===== */
 function studyTestemunha(s){ var ids=(s.tratamentos||[]).map(function(t){return t.id;}); return (s.testemunha&&ids.indexOf(s.testemunha)>=0)?s.testemunha:(ids[0]||''); }
+/* Conjunto de testemunhas/checks = referência primária (% controle) + as marcadas por tratamento */
+function studyTestemunhas(s){ var set={}, ref=studyTestemunha(s); if(ref)set[ref]=true; (s.tratamentos||[]).forEach(function(t){ if(t&&t.testemunha)set[t.id]=true; }); return Object.keys(set); }
+function isTestemunha(s,id){ return studyTestemunhas(s).indexOf(id)>=0; }
 function _avMeans(study, av){
   var rows=_avRowsForStudy(study,false), vars=(av.variaveis||[]), sum={}, cnt={};
   rows.forEach(function(rw){ vars.forEach(function(v){ var n=parseFloat(String(_avNota(av,rw,v)).replace(',','.')); if(!isNaN(n)){ var k=rw.tratId; (sum[k]=sum[k]||{}); (cnt[k]=cnt[k]||{}); sum[k][v]=(sum[k][v]||0)+n; cnt[k][v]=(cnt[k][v]||0)+1; } }); });
