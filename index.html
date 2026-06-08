@@ -239,11 +239,13 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 
 /* HOJE e busca são .btn-sm normais + cores especiais quando urgente */
 .btn-today{display:inline-flex;align-items:center;gap:6px}
-.btn-today.has-urgent{background:rgba(255,82,82,0.25)!important;border-color:#ff5252!important;color:#faa!important}
-.btn-today.has-today{background:rgba(255,152,0,0.25)!important;border-color:#ff9800!important;color:#fc8!important}
+.btn-today.has-urgent{border-color:rgba(229,72,77,.55)!important}
+.btn-today.has-today{border-color:rgba(232,160,40,.5)!important}
 .today-badge{background:#1e3a1e;color:#afa;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;min-width:16px;text-align:center;display:inline-block}
-.btn-today.has-urgent .today-badge{background:#ff5252;color:#fff}
-.btn-today.has-today .today-badge{background:#ff9800;color:#fff}
+.btn-today.has-urgent .today-badge{background:#e5484d!important;color:#fff!important}
+.btn-today.has-today .today-badge{background:#e8a028!important;color:#231900!important}
+/* AGENDA: contagem como pill discreto; some quando zero */
+#agendaBadge{display:none;min-width:20px;height:18px;line-height:18px;padding:0 6px;border-radius:999px;background:#e5484d;color:#fff;font-size:10px;font-weight:850;text-align:center}
 .btn-search{padding:4px 8px!important}
 
 /* Painel Hoje */
@@ -320,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=30').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=31').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -947,7 +949,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 <div class="tb-brand"></div>
 <div class="top-bar-right">
 <span class="top-bar-info" id="dateInfo"></span>
-<button class="btn-sm" id="btnAgenda" onclick="toggleAgenda()">AGENDA <span id="agendaBadge" style="color:#ff5252;font-weight:700"></span></button>
+<button class="btn-sm" id="btnAgenda" onclick="toggleAgenda()">AGENDA <span id="agendaBadge"></span></button>
 </div>
 </div>
 <div class="agenda-panel" id="agendaPanel"></div>
@@ -2322,9 +2324,15 @@ function cloudBadge(kind,txt){
   }
   var el=document.getElementById('cloudBadge');
   if(!el){ el=document.createElement('div'); el.id='cloudBadge'; el.title='Toque para salvar na nuvem agora'; el.onclick=function(){ try{ if(_unsavedChanges && typeof cloudSave==='function'){ cloudBadge('saving'); cloudSave(); } else if(typeof cloudResync==='function'){ cloudResync(); } }catch(e){} }; document.body.appendChild(el); }
-  var L={saving:'⟳ enviando p/ nuvem…', saved:'☁︎ salvo na nuvem', error:'⚠︎ no aparelho · não subiu — toque', offline:'⌁ salvo no aparelho · sem internet', idle:'☁︎'};
+  var L={saving:'↻ salvando na nuvem…', saved:'✓ salvo na nuvem', error:'⚠ não subiu — toque p/ salvar', offline:'⌁ salvo no aparelho · sem internet', idle:'☁︎'};
   el.className='cloud-badge cb-'+(kind||'idle');
   el.textContent=(L[kind||'idle']||L.idle)+(txt?(' '+txt):'');
+  /* discreto: estados em repouso (salvo/idle) somem sozinhos; só salvando/erro/offline ficam fixos */
+  el.style.display='block'; el.style.opacity='';
+  clearTimeout(window._cbHideT);
+  if(kind!=='saving' && kind!=='error' && kind!=='offline'){
+    window._cbHideT=setTimeout(function(){ el.style.opacity='0'; setTimeout(function(){ try{ var c=el.className||''; if(c.indexOf('cb-saving')<0&&c.indexOf('cb-error')<0&&c.indexOf('cb-offline')<0) el.style.display='none'; }catch(e){} }, 600); }, 1600);
+  }
 }
 function cloudApply(st){
   if(!st) return;
@@ -2889,7 +2897,9 @@ function updateAgendaBadge(){
   var events=allUpcomingEvents(7);
   var urgent=events.filter(function(e){return e.diff<=2}).length;
   var badge=document.getElementById("agendaBadge");
-  badge.textContent = urgent>0 ? (' '+urgent) : '';
+  if(!badge) return;
+  badge.textContent = urgent>0 ? String(urgent) : '';
+  badge.style.display = urgent>0 ? 'inline-block' : 'none';
 }
 
 /* ============ DETAIL PANEL ============ */
@@ -7123,6 +7133,7 @@ function updateTodayBadge(){
   if(!el)return;
   var events=collectTodayEvents(0); /* só hoje + atrasados */
   el.textContent=events.length;
+  el.style.setProperty('display', events.length>0?'inline-flex':'none', 'important'); /* sem "HOJE 0" */
   var btn=el.parentElement;
   if(btn){
     btn.classList.remove("has-urgent","has-today");
