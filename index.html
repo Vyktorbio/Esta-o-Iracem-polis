@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=33').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=34').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -5578,9 +5578,7 @@ function renderStudyEditModal(){
   h+='<div class="se-field"><label>Repetições por tratamento</label><input type="number" id="seReps" value="'+s.numRepeticoes+'" min="1" max="10" style="width:80px"></div>';
   h+='<div class="se-field"><label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;color:#c8d8c8;font-size:13px"><input type="checkbox" id="seRandomizado" '+(s.randomizado?'checked':'')+' style="width:auto"> Estudo randomizado</label><div class="e-hint">Usa automaticamente a ordem randomizada de parcelas para o número de tratamentos e repetições deste protocolo.</div></div>';
 
-  h+='<div class="se-field"><label>Testemunha de referência (% controle)</label><select id="seTestemunha">'+
-     (s.tratamentos.length? s.tratamentos.map(function(t){ return '<option value="'+esc(t.id)+'"'+(studyTestemunha(s)===t.id?' selected':'')+'>'+esc(t.id)+(t.produto?' · '+esc(t.produto):'')+'</option>'; }).join('') : '<option value="">— cadastre os tratamentos primeiro —</option>')+
-     '</select><div class="e-hint">Base do % de controle e da AUDPC (a sem aplicação). Pode marcar <b>Testemunha</b> em mais de um tratamento abaixo (ex.: testemunha + padrão).</div></div>';
+  h+='<div class="e-hint" style="margin:2px 0 9px">Marque <b>Testemunha</b> nos tratamentos-controle abaixo (pode mais de uma: ex. testemunha + padrão). A <b>1ª marcada</b> é a base do % de controle e da AUDPC — use a sem aplicação.</div>';
   h+='<div id="seTratList">';
   if(s.tratamentos.length===0){
     h+='<div class="se-empty">Nenhum tratamento. Clique em + para adicionar.</div>';
@@ -5630,7 +5628,7 @@ function syncStudyInputs(){
   workingStudy.intervaloDias=intVal("seIntervalo",workingStudy.intervaloDias||0);
   workingStudy.numRepeticoes=intVal("seReps",workingStudy.numRepeticoes||4);
   x=el("seRandomizado"); if(x) workingStudy.randomizado=!!x.checked;
-  x=el("seTestemunha"); if(x) workingStudy.testemunha=x.value;
+  /* testemunha agora vem dos checkboxes por tratamento (studyTestemunha deriva a referência) */
   x=el("seAvalInicio"); if(x) workingStudy.avalInicio=x.value;
   workingStudy.avalIntervalo=intVal("seAvalInt",workingStudy.avalIntervalo||7);
   workingStudy.avalNum=intVal("seAvalNum",workingStudy.avalNum||0);
@@ -6299,7 +6297,12 @@ function avGridHtml(a){
   return h;
 }
 /* ===== Análise: testemunha selecionável, % de controle e AUDPC ===== */
-function studyTestemunha(s){ var ids=(s.tratamentos||[]).map(function(t){return t.id;}); return (s.testemunha&&ids.indexOf(s.testemunha)>=0)?s.testemunha:(ids[0]||''); }
+function studyTestemunha(s){ /* base do % de controle: 1ª testemunha marcada (preserva a antiga se ainda marcada). */
+  var ts=(s.tratamentos||[]), ids=ts.map(function(t){return t.id;});
+  if(s.testemunha && ids.indexOf(s.testemunha)>=0){ var pt=ts.find(function(t){return t.id===s.testemunha;}); if(pt&&pt.testemunha) return s.testemunha; }
+  for(var i=0;i<ts.length;i++){ if(ts[i]&&ts[i].testemunha) return ts[i].id; }
+  return (s.testemunha&&ids.indexOf(s.testemunha)>=0)?s.testemunha:(ids[0]||'');
+}
 /* Conjunto de testemunhas/checks = referência primária (% controle) + as marcadas por tratamento */
 function studyTestemunhas(s){ var set={}, ref=studyTestemunha(s); if(ref)set[ref]=true; (s.tratamentos||[]).forEach(function(t){ if(t&&t.testemunha)set[t.id]=true; }); return Object.keys(set); }
 function isTestemunha(s,id){ return studyTestemunhas(s).indexOf(id)>=0; }
@@ -6807,7 +6810,8 @@ renderStudyCard=function(qid,study){
   h+='<span>'+study.tratamentos.length+' trat. × '+study.numRepeticoes+' rep.</span>';
   if(study.dataInicio)h+='<span>início '+esc(isoToBR(study.dataInicio))+'</span>';
   h+='<span>'+study.aplicacoes.length+' apl. feita(s)</span>';
-  h+='<span>'+study.avaliacoes.length+' aval.</span>';
+  var _avFt=(study.avaliacoes||[]).filter(function(a){return _avTemNota(a);}).length, _avTt=(study.avaliacoes||[]).length;
+  h+='<span>'+(_avTt>_avFt?(_avFt+' de '+_avTt+' aval.'):(_avTt+' aval.'))+'</span>';
   h+='</div>';
   h+=nextHtml;
   h+='</div>';
