@@ -2611,10 +2611,10 @@ function doLogin(){
 function clearLocalStorageData(){
   var keys = [
     'iracema-v7', 'iracema-safety', 'iracema-unsaved',
-    'iracema-rzlib', 'iracema-georef', 'iracema-qgeo',
-    'iracema-locais', 'iracema-qlocal', 'iracema-qnome',
-    'iracema-active-local', 'iracema-notas-campo',
-    'iracema-del-quadras', 'iracema-del-locais', 'iracema-del-notas'
+    'iracema-randomizacoes-v1', 'iracema-georef-v1', 'iracema-qgeo-v1',
+    'iracema-locais-v1', 'iracema-qlocal-v1', 'iracema-qnome-v1',
+    'iracema-local-ativo', 'iracema-notas-v1',
+    'iracema-delq-v1', 'iracema-dell-v1', 'iracema-deln-v1'
   ];
   keys.forEach(function(k){
     try{ localStorage.removeItem(k); }catch(e){}
@@ -2644,6 +2644,8 @@ function checkAccess(email){
 
 function enforceAccess(){
   if(!_authUser || !_authUser.email) return;
+  if(!_cloudInitDone) return; /* só decide DEPOIS de ler a nuvem ao menos uma vez — nunca expulsa com lista local velha/vazia; offline mantém o acesso */
+  if(typeof ensureConfig==='function') ensureConfig();
   if(!checkAccess(_authUser.email)){
     alert("Acesso não autorizado pelo administrador para " + _authUser.email + ".");
     clearLocalStorageData();
@@ -2660,7 +2662,8 @@ function onAuthed(user){
   _authUser=user; hideAuthGate();
   if(!_appStarted){ _appStarted=true; cloudStart(); }
   else if(typeof cloudResync==='function'){ cloudResync(); }
-  enforceAccess();
+  /* NÃO chama enforceAccess aqui: ele roda dentro do cloudApply, DEPOIS de ler a nuvem.
+     Chamar aqui (síncrono) deslogaria um técnico recém-autorizado com a lista local ainda velha. */
 }
 /* Gate de login: só libera o app (e a leitura/escrita na nuvem) após autenticar.
    A sessão persiste no navegador (supabase) -> funciona offline no campo depois do 1º login. */
