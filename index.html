@@ -320,7 +320,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=28').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=29').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -2476,6 +2476,11 @@ function cloudMerge(local,cloud){
 }
 function cloudSave(){
   if(!cloudInit() || _cloudApplying || !_cloudInitDone) return; /* só escreve depois de ter lido a nuvem */
+  if(window._cloudSavingActive){
+    clearTimeout(_cloudTimer);
+    _cloudTimer=setTimeout(cloudSave, 500);
+    return;
+  }
   cloudBadge('saving');
   var allowShrink=_cloudAllowShrink; _cloudAllowShrink=false;
   var replace=_cloudReplace; _cloudReplace=false;
@@ -2487,8 +2492,9 @@ function cloudSave(){
    - allowShrink (exclusão de quadra/local): TAMBÉM faz merge (com tombstones); só sinaliza ao banco que pode encolher.
    - replace (restauração/import): grava o estado como está, sem merge. */
 function _cloudSaveAttempt(allowShrink, replace, tries){
-  if(!cloudInit()){ cloudBadge('error'); return; }
+  if(!cloudInit()){ cloudBadge('error'); window._cloudSavingActive=false; return; }
   var localState=cloudState();
+  window._cloudSavingActive=true;
   try{
     SB.from('app_state').select('state').eq('id',1).single().then(function(res){
       var cs = res && res.data && res.data.state;
@@ -2502,11 +2508,11 @@ function _cloudSaveAttempt(allowShrink, replace, tries){
           if(r2 && r2.error){
             /* banco RECUSOU (rev velha/conflito) -> re-tenta do zero (relê+merge+regrava), preservando o local */
             if(tries<4){ cloudBadge('saving'); setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 250+tries*300); }
-            else { cloudBadge('error','— toque p/ tentar'); setTimeout(function(){ try{ cloudPull(); }catch(e){} }, 800); }
-          } else { _cloudRev=newRev; setUnsavedChanges(false); cloudBadge('saved'); }
-        }, function(){ if(tries<4){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 400+tries*300); } else cloudBadge('error'); });
-    }, function(){ if(tries<3){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 500); } else cloudBadge('error'); });
-  }catch(e){ cloudBadge('error'); }
+            else { window._cloudSavingActive=false; cloudBadge('error','— toque p/ tentar'); setTimeout(function(){ try{ cloudPull(); }catch(e){} }, 800); }
+          } else { window._cloudSavingActive=false; _cloudRev=newRev; setUnsavedChanges(false); cloudBadge('saved'); }
+        }, function(){ if(tries<4){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 400+tries*300); } else { window._cloudSavingActive=false; cloudBadge('error'); } });
+    }, function(){ if(tries<3){ setTimeout(function(){ _cloudSaveAttempt(allowShrink, replace, tries+1); }, 500); } else { window._cloudSavingActive=false; cloudBadge('error'); } });
+  }catch(e){ window._cloudSavingActive=false; cloudBadge('error'); }
 }
 function cloudSaveSoon(){ setUnsavedChanges(true); if(_cloudApplying || !_cloudInitDone) return; cloudBadge('saving'); clearTimeout(_cloudTimer); _cloudTimer=setTimeout(cloudSave, 900); }
 function cloudSyncNow(){ if(!cloudInit()) return; clearTimeout(_cloudTimer); cloudSave(); }

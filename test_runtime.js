@@ -114,40 +114,102 @@ try {
   process.exit(1);
 }
 
-// Unit tests for Admin Control and BPL Audit trail mapping
+// Unit tests for Admin Control, BPL Audit trail, Input validation, and Role-based Merge
 try {
-  console.log("Running Admin Control Unit Tests...");
+  console.log("Running Comprehensive Application Audit Tests...");
   dom.window.eval(`
     (function() {
-      data = {}; // Initialize data object for testing
+      // 1. Config initialization and basic access checks
+      data = {};
       ensureConfig();
       if (!data.__config) throw new Error("ensureConfig did not initialize __config");
       if (data.__config.adminPassword !== '21ecaab54a2b091391b1fb10eaf969fabbee7cdad3724f3371ae4dc72b4dad0f') throw new Error("default password hash incorrect");
       if (data.__config.adminEmail !== 'machadovictorchaves@gmail.com') throw new Error("default admin email incorrect");
 
-      // Admin email check should be allowed
       var isAllowed = checkAccess('machadovictorchaves@gmail.com');
       if (!isAllowed) throw new Error("Admin email should be allowed");
 
-      // Another email should not be allowed (unauthorized technician)
       var isAllowed2 = checkAccess('tech@agracta.com');
       if (isAllowed2) throw new Error("Non-authorized technician should not have access");
 
-      // Authorize technician
       data.__config.allowedUsers.push({ email: 'tech@agracta.com', nome: 'John Doe' });
       var isAllowed3 = checkAccess('tech@agracta.com');
       if (!isAllowed3) throw new Error("Authorized technician should have access");
 
-      // Check audit log user friendly name resolution
+      // 2. Audit log friendly name resolution
       _authUser = { email: 'tech@agracta.com' };
       var study = { audit: [] };
       logStudyAuditInObject(study, 'Test Action', 'Test Details');
-      if (study.audit[0].user !== 'John Doe') throw new Error("Audit log should resolve tech friendly name. Found: " + study.audit[0].user);
+      if (study.audit[0].user !== 'John Doe') throw new Error("Audit log should resolve tech friendly name");
+
+      _authUser = { email: 'machadovictorchaves@gmail.com' };
+      var studyAdmin = { audit: [] };
+      logStudyAuditInObject(studyAdmin, 'Admin Action', 'Admin Details');
+      if (studyAdmin.audit[0].user !== 'Administrador') throw new Error("Audit log should resolve admin name");
+
+      _authUser = null;
+      var studyOffline = { audit: [] };
+      logStudyAuditInObject(studyOffline, 'Offline Action', 'Offline Details');
+      if (studyOffline.audit[0].user !== 'Local/Offline') throw new Error("Audit log should resolve offline name");
+
+      // 3. Range and input validation (avValidateCell)
+      _avGrid = { tipos: { v1: 'pct', v2: 'contagem' } };
+      
+      // Test percentage validation (max 100, min 0)
+      var inpPctOver = { getAttribute: function() { return 'v1'; }, value: '150' };
+      avValidateCell(inpPctOver);
+      if (inpPctOver.value !== '100') throw new Error("Percentage > 100 should be coerced to 100");
+
+      var inpPctUnder = { getAttribute: function() { return 'v1'; }, value: '-10' };
+      avValidateCell(inpPctUnder);
+      if (inpPctUnder.value !== '0') throw new Error("Percentage < 0 should be coerced to 0");
+
+      // Test count validation (negative coerced to 0, decimals floored)
+      var inpCountNeg = { getAttribute: function() { return 'v2'; }, value: '-5' };
+      avValidateCell(inpCountNeg);
+      if (inpCountNeg.value !== '0') throw new Error("Negative count should be coerced to 0");
+
+      var inpCountDec = { getAttribute: function() { return 'v2'; }, value: '12.8' };
+      avValidateCell(inpCountDec);
+      if (inpCountDec.value !== '12') throw new Error("Count decimal should be floored");
+
+      var inpInvalid = { getAttribute: function() { return 'v2'; }, value: 'abc' };
+      avValidateCell(inpInvalid);
+      if (inpInvalid.value !== '') throw new Error("Invalid number input should be reset to empty");
+
+      // 4. Secure local storage cache clearing
+      localStorage.setItem('iracema-v7', '{"test":"data"}');
+      localStorage.setItem('iracema-safety', '[]');
+      clearLocalStorageData();
+      if (localStorage.getItem('iracema-v7') !== null) throw new Error("clearLocalStorageData did not clear iracema-v7");
+      if (localStorage.getItem('iracema-safety') !== null) throw new Error("clearLocalStorageData did not clear iracema-safety");
+
+      // 5. Config merge logic role priority (admin vs tech)
+      var localConf = {
+        data: {
+          __config: { adminEmail: 'machadovictorchaves@gmail.com', adminPassword: 'old', allowedUsers: [] }
+        }
+      };
+      var cloudConf = {
+        data: {
+          __config: { adminEmail: 'machadovictorchaves@gmail.com', adminPassword: 'new', allowedUsers: [{ email: 't1@agracta.com', nome: 'Tech 1' }] }
+        }
+      };
+
+      // When admin merges, local wins
+      _authUser = { email: 'machadovictorchaves@gmail.com' };
+      var mergedAdmin = cloudMerge(localConf, cloudConf);
+      if (mergedAdmin.data.__config.adminPassword !== 'old') throw new Error("Admin local config should overwrite cloud config");
+
+      // When technician merges, cloud wins
+      _authUser = { email: 't1@agracta.com' };
+      var mergedTech = cloudMerge(localConf, cloudConf);
+      if (mergedTech.data.__config.adminPassword !== 'new') throw new Error("Tech local config should be overwritten by cloud config");
     })()
   `);
-  console.log("Admin Control Unit Tests PASSED successfully.");
+  console.log("Comprehensive Application Audit Tests PASSED successfully.");
 } catch (e) {
-  console.error("Unit test failed:", e.message);
+  console.error("Audit test failed:", e.message);
   process.exit(1);
 }
 
