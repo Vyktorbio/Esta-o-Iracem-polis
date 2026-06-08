@@ -5986,6 +5986,7 @@ function avValidateCell(inp){
     }
     inp.value=String(Math.floor(num));
   }
+  _avPersistNow(); /* autosave da grade manual no blur */
 }
 
 function renderAvGrid(){
@@ -6079,6 +6080,28 @@ function _avAutoState(){
   return {rows:rows,vars:vars,total:total,vi:vi,ri:ri,row:rows[ri],v:vars[vi],tipo:((_avGrid.tipos||{})[vars[vi]]==='contagem'?'contagem':'pct')};
 }
 
+/* AUTOSAVE da avaliação: comita o rascunho (_avGrid) na avaliação real + grava JÁ no localStorage
+   (e nuvem, debounce) a cada célula — não perde se fechar/cair/acabar a bateria antes do SALVAR. */
+function _avPersistNow(){
+  try{
+    var q=data[curV]; if(!q) return;
+    var study=(q.estudos||[]).find(function(s){return s.id===curSid;}); if(!study) return;
+    var av;
+    if(editingAvId==='__new__'){
+      av=draftAv; if(!av) return;
+      if(study.avaliacoes.indexOf(av)<0){ study.avaliacoes.push(av); editingAvId=av.id; } /* a partir daqui é uma avaliação real (não some) */
+    } else {
+      av=study.avaliacoes.find(function(a){return a.id===editingAvId;}); if(!av) return;
+    }
+    var vd=document.getElementById('vData'); if(vd&&vd.value) av.data=vd.value;
+    var vt=document.getElementById('vTipo'); if(vt) av.tipo=vt.value;
+    var vb=document.getElementById('vBBCH'); if(vb) av.bbch=vb.value;
+    var vo=document.getElementById('vObs'); if(vo) av.obs=vo.value.trim();
+    if(typeof _avSyncInputs==='function') _avSyncInputs();
+    av.variaveis=(_avGrid.variaveis||[]).slice(); av.notas=_avGrid.notas; av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
+    if(typeof save==='function') save();
+  }catch(e){}
+}
 function _avSetCell(key,v,val){
   if(val !== '' && val != null) {
     var tp=(_avGrid.tipos&&_avGrid.tipos[v]==='contagem')?'contagem':'pct';
@@ -6103,10 +6126,11 @@ function _avSetCell(key,v,val){
     _avGrid.notas[key][v]=val;
     _avTouchCell(key,v);
   }
-  var w=document.getElementById('avGridWrap'); if(!w) return;
-  Array.prototype.forEach.call(w.querySelectorAll('.av-cell'), function(inp){
+  var w=document.getElementById('avGridWrap');
+  if(w) Array.prototype.forEach.call(w.querySelectorAll('.av-cell'), function(inp){
     if(inp.getAttribute('data-t')===key && inp.getAttribute('data-v')===v) inp.value=val;
   });
+  _avPersistNow(); /* autosave a cada célula */
 }
 
 function renderAvAutoBox(){
