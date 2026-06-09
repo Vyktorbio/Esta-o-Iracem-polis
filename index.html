@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=37').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=38').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -1296,6 +1296,8 @@ function ensureConfig(){
   if(!Array.isArray(data.__config.allowedUsers)) {
     data.__config.allowedUsers = [];
   }
+  if(!data.__config.delUsers || typeof data.__config.delUsers !== 'object') data.__config.delUsers = {};
+  data.__config.allowedUsers.forEach(function(u){ if(u && typeof u==='object' && !u.addedAt) u.addedAt = 1; }); /* backfill: entradas antigas seguem válidas (só uma lápide nova remove) */
   if(typeof data.__config.adminEmail !== 'string' || data.__config.adminEmail === '' || data.__config.adminEmail === 'admin@agracta.com') {
     data.__config.adminEmail = 'machadovictorchaves@gmail.com';
   }
@@ -2403,6 +2405,14 @@ function _mergeById(la,ca,mergeFn,deleted){
   return order.map(function(id){ return byId[id]; });
 }
 function _mergeObj(a,b){ var o={},k; if(b)for(k in b)o[k]=b[k]; if(a)for(k in a)o[k]=a[k]; return o; }
+/* Lista de autorizados (BPL): UNIÃO por email — acumula e NUNCA some por aparelho zerado. 'delUsers' = lápides p/ remover. */
+function _mergeDelUsers(a,b){ var o={},k; a=a||{}; b=b||{}; for(k in b)o[k]=b[k]; for(k in a){ o[k]=Math.max(o[k]||0, a[k]||0); } return o; }
+function _mergeAllowedUsers(la,ca,del){
+  la=Array.isArray(la)?la:[]; ca=Array.isArray(ca)?ca:[]; del=del||{};
+  var by={}; function add(u){ if(!u||typeof u.email!=='string')return; var e=u.email.toLowerCase().trim(); if(!e)return; var ex=by[e]; if(!ex||(u.addedAt||0)>(ex.addedAt||0)) by[e]=u; }
+  ca.forEach(add); la.forEach(add);
+  var out=[]; Object.keys(by).forEach(function(e){ var u=by[e]; if((u.addedAt||0) >= (del[e]||0)) out.push(u); }); return out;
+}
 function _mergeRZLib(a,b){ return normalizeRZLib((b||[]).concat(a||[])); }
 function _markDeleted(o,key,id){ if(!o||!id)return; if(!o[key]||typeof o[key]!=='object')o[key]={}; o[key][id]=Date.now(); }
 /* Merge de UMA avaliação: une variáveis/tipos e notas por parcela/tratamento e variável.
@@ -2491,7 +2501,10 @@ function cloudMerge(local,cloud){
       if(email && (email.toLowerCase().trim() === admEmail.toLowerCase().trim() || email.toLowerCase().trim() === 'machadovictorchaves@gmail.com')){
         isAdmin = true;
       }
-      out.data[qid] = isAdmin ? _mergeObj(lq, cq) : _mergeObj(cq, lq);
+      var cfg = isAdmin ? _mergeObj(lq, cq) : _mergeObj(cq, lq); /* escalares (adminEmail/senha) por papel */
+      cfg.delUsers = _mergeDelUsers(lq.delUsers, cq.delUsers);
+      cfg.allowedUsers = _mergeAllowedUsers(lq.allowedUsers, cq.allowedUsers, cfg.delUsers); /* UNIÃO: nunca perde autorizado, mesmo abrindo aparelho/domínio zerado */
+      out.data[qid] = cfg;
       return;
     }
     var m={},kk; for(kk in cq)m[kk]=cq[kk]; for(kk in lq)m[kk]=lq[kk];
@@ -7466,7 +7479,8 @@ function addAllowedUser(){
   });
   if(exists){ alert('Este e-mail já está autorizado.'); return; }
   
-  data.__config.allowedUsers.push({ email: email, nome: nome });
+  try{ if(data.__config.delUsers) delete data.__config.delUsers[email.toLowerCase().trim()]; }catch(e){} /* re-adicionar: limpa lápide antiga */
+  data.__config.allowedUsers.push({ email: email, nome: nome, addedAt: Date.now() });
   save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} } /* grava JÁ na nuvem (sem o atraso de 0,9s) */
   _stxToast('Técnico ' + nome + ' autorizado — aguarde o selo "salvo na nuvem".');
   renderAdminDashboard();
@@ -7478,6 +7492,8 @@ function removeAllowedUser(idx){
   var users = data.__config.allowedUsers;
   if(idx >= 0 && idx < users.length) {
     var nome = users[idx] ? users[idx].nome : '';
+    var remEmail = (users[idx] && typeof users[idx].email==='string') ? users[idx].email.toLowerCase().trim() : '';
+    if(remEmail){ if(!data.__config.delUsers||typeof data.__config.delUsers!=='object') data.__config.delUsers={}; data.__config.delUsers[remEmail]=Date.now(); } /* lápide: não ressuscita no merge */
     users.splice(idx, 1);
     save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} }
     _stxToast('Técnico ' + nome + ' removido — aguarde "salvo na nuvem".');
