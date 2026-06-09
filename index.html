@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=35').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=36').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -980,6 +980,20 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 <div class="sd-overlay" id="sdOvl"><div id="sdPnl"></div></div>
 <div class="se-overlay" id="seOvl" onclick="if(event.target.id==='seOvl')closeStudyEditV2()"><div class="se-panel" id="sePnl" onclick="event.stopPropagation()"></div></div>
 <div class="se-overlay" id="eeOvl" onclick="if(event.target.id==='eeOvl')closeEventEdit()"><div class="se-panel" id="eePnl" onclick="event.stopPropagation()"></div></div>
+<div id="rubricaOvl" style="display:none;position:fixed;inset:0;z-index:5000;background:#fff;flex-direction:column">
+  <div style="padding:11px 16px;display:flex;justify-content:space-between;align-items:center;background:#eef2ee;border-bottom:1px solid #d7e0d7">
+    <span style="font:700 14px system-ui,sans-serif;color:#1f3326">Rubrica do avaliador</span>
+    <span id="rubricaInfo" style="font:500 12px system-ui,sans-serif;color:#7a8a7e"></span>
+  </div>
+  <div style="flex:1;position:relative;min-height:0;background:#fff">
+    <canvas id="rubricaCanvas" style="position:absolute;inset:0;width:100%;height:100%;display:block;background:#fff;touch-action:none;cursor:crosshair"></canvas>
+  </div>
+  <div style="padding:10px 14px;display:flex;gap:10px;background:#eef2ee;border-top:1px solid #d7e0d7;padding-bottom:calc(10px + env(safe-area-inset-bottom))">
+    <button type="button" onclick="rubricaClear()" style="padding:12px 16px;border:1px solid #c2cdc2;background:#fff;color:#33443a;border-radius:10px;font:700 13px system-ui;cursor:pointer">Limpar</button>
+    <button type="button" onclick="rubricaSkip()" style="padding:12px 16px;border:1px solid #c2cdc2;background:#fff;color:#7a8a7e;border-radius:10px;font:700 13px system-ui;cursor:pointer">Pular</button>
+    <button type="button" onclick="rubricaConfirm()" style="flex:1;padding:12px 16px;border:0;background:#1f7a3a;color:#fff;border-radius:10px;font:800 13px system-ui;cursor:pointer">✓ Confirmar rubrica</button>
+  </div>
+</div>
 
 <!-- Toolbar de backup -->
 <div class="toolbar-extra">
@@ -5364,7 +5378,7 @@ function openStudyDetail(qid,sid){
     var sortAvs=study.avaliacoes.slice().sort(function(a,b){return (a.data||"").localeCompare(b.data||"")});
     sortAvs.forEach(function(a,i){
       h+='<div class="evento-item">';
-      h+='<div class="evento-head"><span class="evento-tipo eval">AV '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+'</span>';
+      h+='<div class="evento-head"><span class="evento-tipo eval">AV '+(i+1)+'</span><span class="evento-data">'+esc(isoToBR(a.data))+'</span>'+((a.carimbo&&a.carimbo.rubrica)?'<span title="Avaliação rubricada" style="margin-left:6px;font-size:12px">✍️</span>':'');
       h+='<button class="evento-del" style="color:#9ac49a" onclick="openStudyEditAvaliacao(\''+a.id+'\')" title="Editar avaliação" aria-label="Editar avaliação AV '+(i+1)+'">✎</button>';
       h+='<button class="evento-del" onclick="removeAvaliacaoV2(\''+a.id+'\')" title="Excluir avaliação" aria-label="Excluir avaliação AV '+(i+1)+'">×</button></div>';
       if(a.tipo)h+='<div class="evento-subtipo">'+esc(a.tipo)+'</div>';
@@ -6469,6 +6483,38 @@ function openStudyEditAvaliacao(aid,tipoSugerido){
   window._avEditing=true; document.getElementById("eeOvl").classList.add("open");
 }
 
+/* ===== RUBRICA (assinatura por toque) — módulo isolado, aditivo ===== */
+var _rubricaCb=null,_rubricaCtx=null,_rubricaDrawing=false,_rubricaDirty=false;
+function _rubricaPos(cv,e){ var r=cv.getBoundingClientRect(); var t=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e; return {x:t.clientX-r.left,y:t.clientY-r.top}; }
+function _rubricaBind(cv){
+  if(cv._rbBound) return; cv._rbBound=true;
+  function start(e){ if(e.cancelable)e.preventDefault(); _rubricaDrawing=true; if(!_rubricaCtx)return; var p=_rubricaPos(cv,e); _rubricaCtx.beginPath(); _rubricaCtx.moveTo(p.x,p.y); _rubricaCtx.lineTo(p.x+0.1,p.y+0.1); _rubricaCtx.stroke(); _rubricaDirty=true; }
+  function move(e){ if(!_rubricaDrawing||!_rubricaCtx)return; if(e.cancelable)e.preventDefault(); var p=_rubricaPos(cv,e); _rubricaCtx.lineTo(p.x,p.y); _rubricaCtx.stroke(); _rubricaDirty=true; }
+  function end(){ _rubricaDrawing=false; }
+  cv.addEventListener('touchstart',start,{passive:false}); cv.addEventListener('touchmove',move,{passive:false}); cv.addEventListener('touchend',end); cv.addEventListener('touchcancel',end);
+  cv.addEventListener('mousedown',start); cv.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
+}
+function openRubrica(onDone,info){
+  var ovl=document.getElementById('rubricaOvl'), cv=document.getElementById('rubricaCanvas');
+  if(!ovl||!cv){ if(onDone)onDone(null); return; }
+  _rubricaCb=onDone||null; _rubricaDirty=false;
+  ovl.style.display='flex';
+  var inf=document.getElementById('rubricaInfo'); if(inf) inf.textContent=info||'';
+  setTimeout(function(){
+    var r=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+    var w=Math.round(r.width)||(cv.parentElement?cv.parentElement.clientWidth:0)||window.innerWidth;
+    var h=Math.round(r.height)||(cv.parentElement?cv.parentElement.clientHeight:0)||(window.innerHeight-130);
+    cv.width=Math.max(1,Math.round(w*dpr)); cv.height=Math.max(1,Math.round(h*dpr));
+    _rubricaCtx=cv.getContext('2d'); _rubricaCtx.setTransform(dpr,0,0,dpr,0,0);
+    _rubricaCtx.lineWidth=2.6; _rubricaCtx.lineCap='round'; _rubricaCtx.lineJoin='round'; _rubricaCtx.strokeStyle='#13202b';
+    _rubricaCtx.clearRect(0,0,w,h);
+    _rubricaBind(cv);
+  },60);
+}
+function rubricaClear(){ var cv=document.getElementById('rubricaCanvas'); if(_rubricaCtx&&cv){ var r=cv.getBoundingClientRect(); _rubricaCtx.clearRect(0,0,r.width,r.height); } _rubricaDirty=false; }
+function _rubricaClose(){ var ovl=document.getElementById('rubricaOvl'); if(ovl) ovl.style.display='none'; }
+function rubricaSkip(){ _rubricaClose(); var cb=_rubricaCb; _rubricaCb=null; if(cb)cb(null); }
+function rubricaConfirm(){ var cv=document.getElementById('rubricaCanvas'),url=null; try{ if(_rubricaDirty&&cv) url=cv.toDataURL('image/png'); }catch(e){} _rubricaClose(); var cb=_rubricaCb; _rubricaCb=null; if(cb)cb(url); }
 function saveAvaliacao(){
   var q=data[curV],study=(q.estudos||[]).find(function(s){return s.id===curSid});
   if(!study)return;
@@ -6533,6 +6579,19 @@ function saveAvaliacao(){
   if(typeof updateAgendaBadge==='function') updateAgendaBadge();
   closeEventEdit();
   openStudyDetail(curV,curSid);
+  /* RUBRICA ao fim da avaliação (ADITIVO: o dado JÁ foi salvo acima; só pede assinatura se ainda não houver). */
+  try{
+    if(typeof openRubrica==='function' && !(av.carimbo&&av.carimbo.rubrica)){
+      var _rqid=curV,_rsid=curSid,_raid=av.id,_rdata=av.data;
+      openRubrica(function(url){ if(!url) return; try{
+        var _q=data[_rqid], _st=_q&&(_q.estudos||[]).find(function(s){return s.id===_rsid;});
+        var _a=_st&&(_st.avaliacoes||[]).find(function(x){return x.id===_raid;});
+        if(_a){ if(!_a.carimbo)_a.carimbo={}; _a.carimbo.rubrica=url; _a.carimbo.rubricaEm=new Date().toISOString();
+          save(); if(typeof setUnsavedChanges==='function')setUnsavedChanges(true); if(typeof cloudSave==='function')cloudSave();
+          if(typeof openStudyDetail==='function')openStudyDetail(_rqid,_rsid); }
+      }catch(e){} }, 'Avaliação '+(isoToBR(_rdata)||_rdata||''));
+    }
+  }catch(e){}
 }
 
 function closeEventEdit(){
