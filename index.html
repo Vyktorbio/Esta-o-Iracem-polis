@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=40').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=41').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -2375,13 +2375,9 @@ function cloudBadge(kind,txt){
   clearTimeout(window._cbHideT); clearTimeout(window._cbShowT);
   function _paint(){ el.className='cloud-badge cb-'+kind; el.textContent=(L[kind]||'')+(txt?(' '+txt):''); el.style.display='block'; el.style.opacity='1'; }
   if(kind==='error' || kind==='offline'){
-    _paint(); /* problema real: fica visível até resolver (tocável p/ tentar salvar) */
-  } else if(kind==='saving'){
-    /* invisível em salvamentos rápidos; só aparece se a nuvem DEMORAR (>1s) — fim do "piscando" */
-    el.style.display='none';
-    window._cbShowT=setTimeout(_paint, 1100);
+    _paint(); /* SÓ problema real fica visível (tocável p/ tentar salvar). Nada de "salvando/salvo". */
   } else {
-    /* tudo ok (salvo/idle) => INVISÍVEL */
+    /* salvando / salvo / idle => SEMPRE invisível — acaba o piscar de vez, mesmo em conexão lenta/iPad */
     el.style.display='none';
   }
 }
