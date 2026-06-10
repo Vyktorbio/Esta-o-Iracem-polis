@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=39').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=40').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -3047,14 +3047,23 @@ function stationBBox(){
 }
 /* BBox usado pelo NDVI: 'quadras' = Plantec; 'view' = o que está visível no mapa (qualquer lugar, via GPS) */
 function ndviBBox(){
-  if(_map){
-    var b=_map.getBounds(), w=b.getWest(), s=b.getSouth(), e=b.getEast(), n=b.getNorth();
-    var cx=(w+e)/2, cy=(s+n)/2, maxSpan=0.25; /* ~27 km — evita pedido gigante/baixa resolução */
+  /* COBRE TODAS AS QUADRAS ATIVAS (+ margem). Antes usava só o viewport do mapa, então quadras fora da
+     tela no momento do carregamento (ex.: B5/B6/H2/H3 nas bordas) ficavam sem NDVI. Agora nenhuma fica de fora. */
+  var sb=stationBBox();
+  if(sb && sb[2]>sb[0] && sb[3]>sb[1]){
+    var w=sb[0],s=sb[1],e=sb[2],n=sb[3], cx=(w+e)/2, cy=(s+n)/2, maxSpan=0.25; /* cap ~27 km */
     if(e-w>maxSpan){ w=cx-maxSpan/2; e=cx+maxSpan/2; }
     if(n-s>maxSpan){ s=cy-maxSpan/2; n=cy+maxSpan/2; }
     return [w,s,e,n];
   }
-  return stationBBox();
+  if(_map){ /* sem quadras: cai pro que está visível */
+    var b=_map.getBounds(), W=b.getWest(), S=b.getSouth(), E=b.getEast(), N=b.getNorth();
+    var ccx=(W+E)/2, ccy=(S+N)/2, ms=0.25;
+    if(E-W>ms){ W=ccx-ms/2; E=ccx+ms/2; }
+    if(N-S>ms){ S=ccy-ms/2; N=ccy+ms/2; }
+    return [W,S,E,N];
+  }
+  return sb;
 }
 function ndviStatus(msg, kind){ var el=document.getElementById('ndviStatus'); if(el){ el.textContent=msg||''; el.style.color=kind==='err'?'#ff8a80':(kind==='ok'?'#9ac49a':'#9ab39a'); } }
 var ndviProbe=false, _gpsMarker=null, _gpsCircle=null;
