@@ -322,7 +322,7 @@ body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#ccc;
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Agracta">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=42').catch(function(){});});}</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js?v=43').catch(function(){});});}</script>
 <style>
 #map{position:absolute;inset:0;width:100%;height:100%;background:#0a0f0a;z-index:1}
 .leaflet-container{background:#0a0f0a;outline:none;font-family:inherit}
@@ -2201,6 +2201,8 @@ function toggleMainMenu(){
   var adm=isAdmin();
   m.innerHTML=
     (!isStandalone()?'<button class="mm-install" onclick="installApp()">'+ic('phone')+' Instalar app</button><div class="mm-sep"></div>':'')+
+    '<button onclick="closeMainMenu();if(typeof cloudResync===\'function\')cloudResync();if(typeof _stxToast===\'function\')_stxToast(\'Atualizando da nuvem…\');">'+ic('refresh')+' Atualizar (puxar da nuvem)</button>'+
+    '<div class="mm-sep"></div>'+
     '<button onclick="closeMainMenu();toggleQuadraEdit()">'+ic('pencil')+' Editar quadras</button>'+
     (adm?'<button onclick="closeMainMenu();startGeoref()">'+ic('pin')+' Alinhar mapa</button>':'')+
     '<div class="mm-sep"></div>'+
@@ -2510,9 +2512,9 @@ function cloudMerge(local,cloud){
   out._deletedQuadras=delQ; out._deletedLocais=delL; out._deletedNotas=delN;
   function strip(obj,tomb){ var o={},k; for(k in (obj||{})){ if(!tomb[k]) o[k]=obj[k]; } return o; }
   var _mq=_mergeQGEO(local.qgeo,cloud.qgeo,local.qgeots,cloud.qgeots,delQ); out.qgeo=_mq.geo; out.qgeots=_mq.ts; /* mapa: vale o mais recente por quadra */
-  out.qlocal=strip(_mergeObj(local.qlocal,cloud.qlocal),delQ);
-  out.qnome=strip(_mergeObj(local.qnome,cloud.qnome),delQ);
-  out.locais=strip(_mergeObj(local.locais,cloud.locais),delL);
+  out.qlocal=strip(_mergeObj(cloud.qlocal,local.qlocal),delQ); /* NUVEM vence: aparelho velho não sobrescreve a config (locais/nomes) */
+  out.qnome=strip(_mergeObj(cloud.qnome,local.qnome),delQ);
+  out.locais=strip(_mergeObj(cloud.locais,local.locais),delL);
   out.randomizacoes=_mergeRZLib(local.randomizacoes,cloud.randomizacoes);
   var _lgt=local.georefts||0,_cgt=cloud.georefts||0; out.georef=(_lgt>_cgt)?(local.georef||cloud.georef):(cloud.georef||local.georef); out.georefts=Math.max(_lgt,_cgt); /* georef: mais recente vence (empate => nuvem) */
   out.notas_campo = _mergeById(local.notas_campo, cloud.notas_campo, _mergeNota, delN);
@@ -2722,14 +2724,9 @@ function checkAccess(email){
 }
 
 function enforceAccess(){
-  if(!_authUser || !_authUser.email) return;
-  if(!_cloudInitDone) return; /* só decide DEPOIS de ler a nuvem ao menos uma vez — nunca expulsa com lista local velha/vazia; offline mantém o acesso */
-  if(typeof ensureConfig==='function') ensureConfig();
-  if(!checkAccess(_authUser.email)){
-    alert("Acesso não autorizado pelo administrador para " + _authUser.email + ".");
-    clearLocalStorageData();
-    doLogout();
-  }
+  /* SEM TRAVA: o login virou só sessão/identidade. Ninguém é deslogado por "não autorizado" —
+     acabou o "não permitido". A nuvem é a fonte da verdade. (Controle de acesso removido a pedido.) */
+  return;
 }
 
 function doLogout(){
@@ -4102,6 +4099,37 @@ function _isoShift(iso,days){ var d=new Date(iso+'T00:00:00'); if(isNaN(d)) retu
 function _stxCopyFallback(text){ try{ var ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.focus(); ta.select(); var ok=document.execCommand('copy'); document.body.removeChild(ta); return ok; }catch(e){ return false; } }
 function _stxCopy(text){ try{ if(navigator.clipboard&&navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function(){return true;},function(){return _stxCopyFallback(text);}); }catch(e){} return Promise.resolve(_stxCopyFallback(text)); }
 function _stxToast(msg){ var t=document.getElementById('stxToast'); if(!t){ t=document.createElement('div'); t.id='stxToast'; t.style.cssText='position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:3000;background:#1f5a2a;color:#eafaea;padding:9px 16px;border-radius:999px;font:600 13px system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.4);transition:opacity .3s;pointer-events:none'; document.body.appendChild(t);} t.textContent=msg; t.style.opacity='1'; clearTimeout(window._stxTt); window._stxTt=setTimeout(function(){t.style.opacity='0';},1900); }
+/* ===================== ESTATÍSTICA — ANOVA (DBC) + Tukey HSD + letrinhas ===================== */
+function _lgamma(x){ var c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5]; var y=x,t=x+5.5; t-=(x+0.5)*Math.log(t); var sm=1.000000000190015; for(var j=0;j<6;j++){y++;sm+=c[j]/y;} return -t+Math.log(2.5066282746310005*sm/x); }
+function _betacf(a,b,x){ var FPMIN=1e-30,qab=a+b,qap=a+1,qam=a-1,c=1,d=1-qab*x/qap; if(Math.abs(d)<FPMIN)d=FPMIN; d=1/d; var h=d; for(var m=1;m<=240;m++){ var m2=2*m,aa=m*(b-m)*x/((qam+m2)*(a+m2)); d=1+aa*d; if(Math.abs(d)<FPMIN)d=FPMIN; c=1+aa/c; if(Math.abs(c)<FPMIN)c=FPMIN; d=1/d; h*=d*c; aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2)); d=1+aa*d; if(Math.abs(d)<FPMIN)d=FPMIN; c=1+aa/c; if(Math.abs(c)<FPMIN)c=FPMIN; d=1/d; var del=d*c; h*=del; if(Math.abs(del-1)<3e-7)break; } return h; }
+function _betai(a,b,x){ if(x<=0)return 0; if(x>=1)return 1; var bt=Math.exp(_lgamma(a+b)-_lgamma(a)-_lgamma(b)+a*Math.log(x)+b*Math.log(1-x)); return x<(a+1)/(a+b+2) ? bt*_betacf(a,b,x)/a : 1-bt*_betacf(b,a,1-x)/b; }
+function _fpval(F,d1,d2){ if(!(F>0)||!isFinite(F))return 1; return _betai(d2/2,d1/2,d2/(d2+d1*F)); }
+function _erfc(x){ var z=Math.abs(x),t=1/(1+0.5*z); var r=t*Math.exp(-z*z-1.26551223+t*(1.00002368+t*(0.37409196+t*(0.09678418+t*(-0.18628806+t*(0.27886807+t*(-1.13520398+t*(1.48851587+t*(-0.82215223+t*0.17087277))))))))); return x>=0?r:2-r; }
+function _ncdf(x){ return 1-0.5*_erfc(x/Math.SQRT2); }
+function _prange(w,k){ if(w<=0)return 0; var lo=-8,hi=8,n=240,h=(hi-lo)/n,sum=0,SQ=Math.sqrt(2*Math.PI); for(var i=0;i<=n;i++){ var u=lo+i*h,f=Math.exp(-u*u/2)/SQ*Math.pow(_ncdf(u)-_ncdf(u-w),k-1),wg=(i===0||i===n)?1:(i%2?4:2); sum+=wg*f; } return Math.min(1,Math.max(0,k*sum*h/3)); }
+function _ptukey(q,k,nu){ if(nu>2000) return _prange(q,k); var c=(nu/2)*Math.log(nu/2)-_lgamma(nu/2), lo=1e-4, hi=Math.max(3,1+10/Math.sqrt(Math.max(1,nu))), n=160, h=(hi-lo)/n, sum=0; for(var i=0;i<=n;i++){ var s=lo+i*h, dens=Math.exp(Math.log(2)+c+(nu-1)*Math.log(s)-nu*s*s/2), f=_prange(q*s,k)*dens, wg=(i===0||i===n)?1:(i%2?4:2); sum+=wg*f; } return Math.min(1,Math.max(0,sum*h/3)); }
+function _qtukey(k,nu,alpha){ alpha=alpha||0.05; var target=1-alpha,lo=0.1,hi=30; for(var it=0;it<60;it++){ var mid=(lo+hi)/2; if(_ptukey(mid,k,nu)<target) lo=mid; else hi=mid; } return (lo+hi)/2; }
+function _tukeyLetters(order, tMean, hsd){ var n=order.length, m=order.map(function(id){return tMean[id];}); var ivs=[], lastB=-1; for(var a=0;a<n;a++){ var b=a; while(b+1<n && (m[a]-m[b+1])<=hsd+1e-9) b++; if(b>lastB){ ivs.push([a,b]); lastB=b; } } var lt=order.map(function(){return '';}); ivs.forEach(function(iv,ki){ var ch=String.fromCharCode(97+ki); for(var x=iv[0];x<=iv[1];x++) lt[x]+=ch; }); var out={}; order.forEach(function(id,i){ out[id]=lt[i]; }); return out; }
+/* ANOVA em blocos casualizados (DBC, blocos=repetições) + Tukey 5% p/ UMA avaliação+variável. null se desbalanceado/insuficiente. */
+function statDBC(s, av, v){
+  var ts=(s.tratamentos||[]).map(function(t){return t.id;}), r=Math.max(1,parseInt(s.numRepeticoes)||1), t=ts.length;
+  if(t<2 || r<2) return null;
+  var Y={}, all=[], ok=true;
+  ts.forEach(function(tid){ Y[tid]=[]; for(var rep=1;rep<=r;rep++){ var raw=_avNota(av,{key:_avRowKey(tid,rep),tratId:tid,rep:rep},v); var x=parseFloat(String(raw==null?'':raw).replace(',','.')); if(isNaN(x)) ok=false; Y[tid].push(x); all.push(x); } });
+  if(!ok) return null; /* precisa estar tudo preenchido (balanceado) */
+  var N=t*r, grand=all.reduce(function(a,b){return a+b;},0)/N;
+  var tM={}; ts.forEach(function(tid){ tM[tid]=Y[tid].reduce(function(a,b){return a+b;},0)/r; });
+  var bM=[],j; for(j=0;j<r;j++){ var sb=0; ts.forEach(function(tid){ sb+=Y[tid][j]; }); bM.push(sb/t); }
+  var SSt=0; ts.forEach(function(tid){ SSt+=Math.pow(tM[tid]-grand,2); }); SSt*=r;
+  var SSb=0; for(j=0;j<r;j++) SSb+=Math.pow(bM[j]-grand,2); SSb*=t;
+  var SStot=0; all.forEach(function(x){ SStot+=Math.pow(x-grand,2); });
+  var SSe=Math.max(0,SStot-SSt-SSb), dft=t-1, dfb=r-1, dfe=(t-1)*(r-1);
+  var MSt=SSt/dft, MSe=dfe>0?SSe/dfe:0, F=MSe>0?MSt/MSe:Infinity, p=_fpval(F,dft,dfe);
+  var cv=grand!==0?Math.sqrt(MSe)/Math.abs(grand)*100:null;
+  var q=_qtukey(t,dfe,0.05), hsd=q*Math.sqrt(MSe/r);
+  var order=ts.slice().sort(function(a,b){return tM[b]-tM[a];});
+  return { t:t,r:r,N:N, grand:grand, dft:dft,dfb:dfb,dfe:dfe, SSt:SSt,SSb:SSb,SSe:SSe,SStot:SStot, MSt:MSt,MSe:MSe, F:F,p:p,cv:cv, q:q,hsd:hsd, tMean:tM, letras:_tukeyLetters(order,tM,hsd), order:order, sig:(p<0.05) };
+}
 function buildStudyRecord(qid,s){
   var q=data[qid]||{};
   var locNome=(LOCAIS&&QLOCAL&&LOCAIS[QLOCAL[qid]]&&LOCAIS[QLOCAL[qid]].nome)||(LOCAIS&&LOCAIS[HOME_LOCAL]&&LOCAIS[HOME_LOCAL].nome)||'';
