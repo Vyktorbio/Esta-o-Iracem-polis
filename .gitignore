@@ -3,6 +3,26 @@ ndvi-credenciais.json
 # NUNCA versionar a credencial da Ecowitt (Application Key + API Key)
 ecowitt-credenciais.json
 
+# Segredos / ambiente em geral
+.env
+.env.*
+*.pem
+*.key
+
+# Backups e exports com dados reais de quadras/estudos (nunca versionar)
+*.zip
+*.xlsx
+backups/
+exports/
+iracemapolis-*.json
+backup-*.json
+*-backup*.json
+cloud-*.json
+
+# Ferramentas locais
+.claude/
+node_modules/
+
 # Python / sistema
 __pycache__/
 *.pyc

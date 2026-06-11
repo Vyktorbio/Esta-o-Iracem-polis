@@ -28,6 +28,24 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT = int(os.environ.get("PORT", "8799"))
 HOST = "0.0.0.0" if os.environ.get("PORT") else "127.0.0.1"  # nuvem (Render) usa $PORT e 0.0.0.0; local fica em 127.0.0.1
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# CORS: só o app pode usar o proxy pelo navegador (protege a cota Sentinel/Ecowitt).
+# Para liberar outra origem sem mexer no código: env ALLOWED_ORIGINS="https://a.com,https://b.com" (soma às padrão).
+ALLOWED_ORIGINS = {
+    "https://www.agracta.com.br",
+    "https://agracta.com.br",
+    "https://vyktorbio.github.io",
+}
+ALLOWED_ORIGINS |= {o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()}
+
+def origin_permitida(origin):
+    if not origin:
+        return False
+    if origin in ALLOWED_ORIGINS:
+        return True
+    # desenvolvimento local (qualquer porta)
+    return origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:") \
+        or origin in ("http://localhost", "http://127.0.0.1")
 TOKEN_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
 PROCESS_URL = "https://sh.dataspace.copernicus.eu/process/v1"
 STATS_URL   = "https://sh.dataspace.copernicus.eu/statistics/v1"
@@ -392,9 +410,13 @@ def do_clima(mac):
 # ---------------------------------------------------------------- HTTP server
 class H(BaseHTTPRequestHandler):
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        # ecoa a origem SÓ se permitida; sem o header, o navegador bloqueia páginas de terceiros
+        origin = self.headers.get("Origin")
+        if origin_permitida(origin):
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Headers", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
     def _json(self, obj, code=200):
         b = json.dumps(obj).encode()
         self.send_response(code); self._cors()
