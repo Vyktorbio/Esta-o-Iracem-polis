@@ -1937,8 +1937,8 @@ function _mergeQGEO(lq,cq,lts,cts,del){
   var ids={},k; for(k in lq)ids[k]=1; for(k in cq)ids[k]=1;
   var g={},t={};
   Object.keys(ids).forEach(function(id){
-    if(del[id]) return; /* deletado (lápide) não ressuscita */
     var hasL=(id in lq), hasC=(id in cq), lt=lts[id]||0, ct=cts[id]||0;
+    if(del[id] && Math.max(lt,ct) <= del[id]) return; /* lápide só apaga o que existia ANTES da exclusão; quadra recriada DEPOIS sobrevive */
     var useLocal = (hasL&&hasC) ? (lt>ct) : hasL; /* ambos têm: ESTRITAMENTE mais novo vence; empate => nuvem */
     g[id] = useLocal ? lq[id] : cq[id];
     t[id] = Math.max(lt,ct);
@@ -1971,7 +1971,7 @@ function saveQLocal(){ try{ localStorage.setItem(QLOCAL_KEY, JSON.stringify(QLOC
 function loadQNome(){ try{ var s=localStorage.getItem(QNOME_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function saveQNome(){ try{ localStorage.setItem(QNOME_KEY, JSON.stringify(QNOME)); }catch(e){} if(typeof cloudSaveSoon==='function') cloudSaveSoon(); }
 function quadraNome(id){ if(!QNOME){ QNOME=loadQNome()||{}; } return (QNOME[id]!=null && QNOME[id]!=='') ? QNOME[id] : id; }
-function novoQuadraId(nome){ var b=String(nome||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'')||'Q'; if(!QGEO || !QGEO[b]) return b; var k; do{ k=b+'~'+Math.random().toString(36).slice(2,6); }while(QGEO&&QGEO[k]); return k; }
+function novoQuadraId(nome){ var b=String(nome||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Za-z0-9_-]+/g,'_').replace(/^_+|_+$/g,'')||'Q'; if((!QGEO || !QGEO[b]) && !(_delQuadras&&_delQuadras[b])) return b; var k; do{ k=b+'~'+Math.random().toString(36).slice(2,6); }while((QGEO&&QGEO[k])||(_delQuadras&&_delQuadras[k])); return k; }
 function _homeCentro(){ try{ if(_geo&&_geo.corners){ var c=_geo.corners; return [ (c[0][0]+c[2][0])/2, (c[0][1]+c[2][1])/2 ]; } }catch(e){} return ESTACAO_CENTER.slice(); }
 function ensureLocais(){
   if(!LOCAIS) LOCAIS=loadLocais()||{};
@@ -2448,7 +2448,11 @@ function _markDeleted(o,key,id){ if(!o||!id)return; if(!o[key]||typeof o[key]!==
 /* Merge de UMA avaliação: une variáveis/tipos e notas por parcela/tratamento e variável.
    Células com metadado usam a edição mais recente; vazio antigo não apaga valor novo. */
 function _mergeAval(la,ca){
-  var m={},k; for(k in ca)m[k]=ca[k]; for(k in la)m[k]=la[k]; /* campos escalares: prefere local */
+  /* campos escalares (data/tipo/bbch/obs): a edição mais NOVA vence; empate/sem carimbo: local (compat) */
+  var _lt=la._ts||0, _ct=ca._ts||0, m={},k;
+  if(_ct>_lt){ for(k in la)m[k]=la[k]; for(k in ca)m[k]=ca[k]; }
+  else { for(k in ca)m[k]=ca[k]; for(k in la)m[k]=la[k]; }
+  if(_lt||_ct) m._ts=Math.max(_lt,_ct);
   var vars=(ca.variaveis||[]).slice();
   (la.variaveis||[]).forEach(function(v){ if(vars.indexOf(v)<0) vars.push(v); });
   m.variaveis=vars;
@@ -2485,11 +2489,17 @@ function _mergeAval(la,ca){
   m.notasMeta=metas;
   return m;
 }
+/* Aplicação: a edição mais NOVA vence o item inteiro (empate/sem carimbo: local, compat) */
+function _mergeAplicacao(la,ca){ return ((ca&&ca._ts)||0)>((la&&la._ts)||0) ? ca : la; }
 function _mergeStudy(ls,cs){
-  var m={},k; for(k in cs)m[k]=cs[k]; for(k in ls)m[k]=ls[k]; /* prefere campos locais; mantém campos só-da-nuvem */
+  /* escalares do estudo: a edição mais NOVA vence; empate/sem carimbo: local (compat) */
+  var lt=ls._ts||0, ct=cs._ts||0, m={},k;
+  if(ct>lt){ for(k in ls)m[k]=ls[k]; for(k in cs)m[k]=cs[k]; }
+  else { for(k in cs)m[k]=cs[k]; for(k in ls)m[k]=ls[k]; }
+  if(lt||ct) m._ts=Math.max(lt,ct);
   var delAp=_mergeObj(ls._deletedAplicacoes,cs._deletedAplicacoes), delAv=_mergeObj(ls._deletedAvaliacoes,cs._deletedAvaliacoes);
   m._deletedAplicacoes=delAp; m._deletedAvaliacoes=delAv;
-  m.aplicacoes=_mergeById(ls.aplicacoes,cs.aplicacoes,null,delAp);
+  m.aplicacoes=_mergeById(ls.aplicacoes,cs.aplicacoes,_mergeAplicacao,delAp);
   m.avaliacoes=_mergeById(ls.avaliacoes,cs.avaliacoes,_mergeAval,delAv);
   if(!(ls.tratamentos&&ls.tratamentos.length)&&(cs.tratamentos&&cs.tratamentos.length)) m.tratamentos=cs.tratamentos;
   return m;
@@ -2512,8 +2522,10 @@ function cloudMerge(local,cloud){
   out._deletedQuadras=delQ; out._deletedLocais=delL; out._deletedNotas=delN;
   function strip(obj,tomb){ var o={},k; for(k in (obj||{})){ if(!tomb[k]) o[k]=obj[k]; } return o; }
   var _mq=_mergeQGEO(local.qgeo,cloud.qgeo,local.qgeots,cloud.qgeots,delQ); out.qgeo=_mq.geo; out.qgeots=_mq.ts; /* mapa: vale o mais recente por quadra */
-  out.qlocal=strip(_mergeObj(cloud.qlocal,local.qlocal),delQ); /* NUVEM vence: aparelho velho não sobrescreve a config (locais/nomes) */
-  out.qnome=strip(_mergeObj(cloud.qnome,local.qnome),delQ);
+  function qViva(id){ return !delQ[id] || ((_mq.ts[id]||0) > delQ[id]); } /* recriada DEPOIS da exclusão: viva (lápide não engole) */
+  function stripQ(obj){ var o={},k; for(k in (obj||{})){ if(qViva(k)) o[k]=obj[k]; } return o; }
+  out.qlocal=stripQ(_mergeObj(cloud.qlocal,local.qlocal)); /* NUVEM vence: aparelho velho não sobrescreve a config (locais/nomes) */
+  out.qnome=stripQ(_mergeObj(cloud.qnome,local.qnome));
   out.locais=strip(_mergeObj(cloud.locais,local.locais),delL);
   out.randomizacoes=_mergeRZLib(local.randomizacoes,cloud.randomizacoes);
   var _lgt=local.georefts||0,_cgt=cloud.georefts||0; out.georef=(_lgt>_cgt)?(local.georef||cloud.georef):(cloud.georef||local.georef); out.georefts=Math.max(_lgt,_cgt); /* georef: mais recente vence (empate => nuvem) */
@@ -2521,7 +2533,7 @@ function cloudMerge(local,cloud){
   out.data={};
   var ids={},k; for(k in (cloud.data||{}))ids[k]=1; for(k in (local.data||{}))ids[k]=1;
   Object.keys(ids).forEach(function(qid){
-    if(delQ[qid]) return; /* quadra excluída: não ressuscita pelo merge */
+    if(!qViva(qid)) return; /* quadra excluída: não ressuscita pelo merge (recriada depois, sobrevive) */
     var lq=(local.data||{})[qid], cq=(cloud.data||{})[qid];
     if(!lq){ out.data[qid]=cq; return; } if(!cq){ out.data[qid]=lq; return; }
     if(qid === '__config'){
@@ -2537,7 +2549,11 @@ function cloudMerge(local,cloud){
       out.data[qid] = cfg;
       return;
     }
-    var m={},kk; for(kk in cq)m[kk]=cq[kk]; for(kk in lq)m[kk]=lq[kk];
+    /* campos da quadra (cultura/cultivar/plantio/área): a edição mais NOVA vence.
+       Sem carimbo (legado), NUVEM vence — aparelho parado não atropela o que os outros mudaram. */
+    var lts2=lq._ts||0, cts2=cq._ts||0, base=(lts2>cts2)?cq:lq, top=(lts2>cts2)?lq:cq;
+    var m={},kk; for(kk in base)m[kk]=base[kk]; for(kk in top)m[kk]=top[kk];
+    if(lts2||cts2) m._ts=Math.max(lts2,cts2);
     var delS=_mergeObj(lq._deletedStudies,cq._deletedStudies); m._deletedStudies=delS;
     m.estudos=_mergeById(lq.estudos,cq.estudos,_mergeStudy,delS);
     out.data[qid]=m;
@@ -2630,6 +2646,7 @@ function cloudSubscribe(){
     if(_cloudCh){ try{ SB.removeChannel(_cloudCh); }catch(e){} _cloudCh=null; }
     _cloudCh=SB.channel('app_state_rt').on('postgres_changes', {event:'UPDATE', schema:'public', table:'app_state'}, function(p){
       if(p && p.new && p.new.state) cloudApply(p.new.state);
+      else cloudPull(); /* estado grande demais p/ o payload do realtime: puxa por REST (senão o aparelho fica para trás em silêncio) */
     }).subscribe(function(status){
       if(status==='SUBSCRIBED'){ _cloudReady=true; cloudBadge('saved'); }
       else if(status==='CHANNEL_ERROR' || status==='TIMED_OUT' || status==='CLOSED'){ _cloudReady=false; cloudBadge('offline'); clearTimeout(window._cloudReTimer); window._cloudReTimer=setTimeout(cloudSubscribe, 4000); }
@@ -4421,13 +4438,16 @@ function saveE(){
   }
   ecReadRows();
   var culturas=_ecRows.filter(function(c){return c.cultura;}).map(function(c){return {cultura:c.cultura,cultivar:(c.cultivar||'').trim(),plantio:(c.plantio||'').trim()};});
-  var estudos = (data[curE]&&data[curE].estudos)||[];
+  var prev=data[curE]||{};
+  var estudos = prev.estudos||[];
   var prim = culturas[0]||{cultura:'',cultivar:'',plantio:''};
   data[curE]={
     cultura:prim.cultura, cultivar:prim.cultivar, plantio:prim.plantio,
     culturas:culturas,
     area:parseFloat(document.getElementById("ea").value)||null,
-    estudos:estudos
+    estudos:estudos,
+    _deletedStudies:prev._deletedStudies, /* preserva lápides de estudos (antes, editar a quadra as apagava) */
+    _ts:Date.now() /* carimbo: no merge, a edição mais nova vence */
   };
   save();closeEdit();render();renderLeg();updateAgendaBadge();
   if(curV)showD(curV);
@@ -4571,6 +4591,7 @@ function saveStudy(){
     details = 'Nome: "' + s.nome + '" (V1)';
   }
   logStudyAuditInObject(s, action, details);
+  s._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
 
   if(idx>=0)q.estudos[idx]=s; else q.estudos.push(s);
   data[curS]=q;
@@ -5834,6 +5855,7 @@ function saveStudyV2(){
     details = 'Código: "' + s.codigo + '", ' + s.tratamentos.length + ' tratamentos, ' + s.numRepeticoes + ' repetições.';
   }
   logStudyAuditInObject(s, action, details);
+  s._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
 
   if(idx>=0)q.estudos[idx]=s;
   else q.estudos.push(s);
@@ -6072,6 +6094,7 @@ function saveAplicacao(){
     draftAp=null;
   }
   if(!ap.carimbo) carimbar(curV,curSid,ap.id,'apl');
+  ap._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
   logStudyAuditInObject(study, action, details);
   save();
   if(typeof updateTodayBadge==='function') updateTodayBadge();
@@ -6295,6 +6318,7 @@ function _avPersistNow(){
     var vo=document.getElementById('vObs'); if(vo) av.obs=vo.value.trim();
     if(typeof _avSyncInputs==='function') _avSyncInputs();
     av.variaveis=(_avGrid.variaveis||[]).slice(); av.notas=_avGrid.notas; av.tipos=_avGrid.tipos; av.notasMeta=_avGrid.meta||{};
+    av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
     try{ localStorage.setItem("iracema-v7", JSON.stringify(data)); }catch(e){} /* durável no aparelho NA HORA, sem rede */
     if(typeof setUnsavedChanges==='function') setUnsavedChanges(true);
     /* nuvem NÃO grava a cada célula (poupa bateria): sobe ao FECHAR a avaliação, no SALVAR, ou no botão "salvar na nuvem". O selo fica "pendente" até lá. */
@@ -6671,6 +6695,7 @@ function saveAvaliacao(){
     draftAv=null;
   }
   if(!av.carimbo) carimbar(curV,curSid,av.id,'aval');
+  av._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
   logStudyAuditInObject(study, action, details);
   save();
   if(typeof updateTodayBadge==='function') updateTodayBadge();
