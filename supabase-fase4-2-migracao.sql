@@ -19,6 +19,12 @@
 -- do mapa é fracionário (ex.: 17.92) -> corrige o tipo (inofensivo se já for numeric)
 alter table public.locais alter column zoom type numeric;
 
+-- Avaliações AUTO usam id derivado da data (auto_AAAA-MM-DD), que se repete entre
+-- estudos -> na tabela o id vira "idDoEstudo:auto_..." (único e ainda determinístico).
+-- Limpa linhas de uma migração anterior que tenham colidido no id cru (recriadas abaixo).
+delete from public.lancamentos where avaliacao_id like 'auto\_%';
+delete from public.avaliacoes  where id like 'auto\_%';
+
 -- datas podem vir como AAAA-MM-DD (padrão) ou DD/MM/AAAA (legado)
 create or replace function public._f4_data(t text)
 returns date language plpgsql immutable as $$
@@ -46,6 +52,7 @@ declare
   vari  text;
   meta  jsonb;
   item  jsonb;
+  av_id text;
   n_loc int := 0; n_q int := 0; n_e int := 0; n_ap int := 0;
   n_av int := 0; n_lan int := 0; n_not int := 0; n_rz int := 0;
 begin
@@ -163,10 +170,14 @@ begin
         if jsonb_typeof(est->'avaliacoes')='array' then
           for av in select * from jsonb_array_elements(est->'avaliacoes') loop
             continue when av->>'id' is null;
+            -- id auto (auto_data) repete entre estudos -> namespace por estudo
+            av_id := case when (av->>'id') like 'auto\_%'
+                          then (est->>'id') || ':' || (av->>'id')
+                          else av->>'id' end;
             insert into public.avaliacoes (id, estudo_id, data, tipo, bbch, obs, auto,
               variaveis, tipos, carimbo, extras, client_ts)
             values (
-              av->>'id', est->>'id', public._f4_data(av->>'data'),
+              av_id, est->>'id', public._f4_data(av->>'data'),
               av->>'tipo', av->>'bbch', av->>'obs',
               coalesce((av->>'auto')::boolean, false),
               coalesce(av->'variaveis','[]'::jsonb),
@@ -194,7 +205,7 @@ begin
                   insert into public.lancamentos
                     (avaliacao_id, parcela, variavel, valor, client_ts)
                   values (
-                    av->>'id', parc, vari, linha->>vari,
+                    av_id, parc, vari, linha->>vari,
                     round(nullif(meta->>'ts','')::numeric)::bigint
                   )
                   on conflict (avaliacao_id, parcela, variavel) do update
