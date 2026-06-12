@@ -1495,6 +1495,7 @@ function initMap(){
   try{ LF.control.scale({ metric:true, imperial:false, maxWidth:150, position:'bottomleft' }).addTo(_map); }catch(e){}
   addRotateControl();
   addMenuControl();
+  addMapCtlToggle();
   setTimeout(function(){ try{ _map.invalidateSize(); }catch(e){} }, 200);
   window.addEventListener('resize', function(){ try{ _map.invalidateSize(); }catch(e){} });
   _geo = loadGeoref();
@@ -1825,6 +1826,29 @@ function addRotateControl(){
     return d;
   };
   C.addTo(_map);
+}
+/* ---- Agrupador: zoom/camadas/girar somem atr\u00e1s de UM bot\u00e3o (mapa limpo) ---- */
+function addMapCtlToggle(){
+  if(!_map || _map.__ctlToggle) return; _map.__ctlToggle=true;
+  if(!document.getElementById('mapCtlCss')){ var s=document.createElement('style'); s.id='mapCtlCss';
+    s.textContent='.leaflet-top.leaflet-left .leaflet-control{display:none}.leaflet-top.leaflet-left .leaflet-control.mapctl-toggle{display:block}body.mapctl-open .leaflet-top.leaflet-left .leaflet-control{display:block}body.mapctl-open .leaflet-top.leaflet-left .rot-ctl{display:flex}';
+    document.head.appendChild(s); }
+  var C=LF.control({position:'topleft'});
+  C.onAdd=function(){
+    var d=LF.DomUtil.create('div','rot-ctl mapctl-toggle');
+    d.innerHTML='<button id="mapCtlBtn" title="Controles do mapa (zoom, camadas, girar)" aria-expanded="false" aria-label="Controles do mapa">\u2699\ufe0e</button>';
+    LF.DomEvent.disableClickPropagation(d); LF.DomEvent.disableScrollPropagation(d);
+    d.querySelector('button').onclick=function(){
+      var open=!document.body.classList.contains('mapctl-open');
+      document.body.classList.toggle('mapctl-open', open);
+      this.textContent=open?'\u2715':'\u2699\ufe0e';
+      this.setAttribute('aria-expanded', open?'true':'false');
+    };
+    return d;
+  };
+  C.addTo(_map);
+  /* o agrupador fica no TOPO da pilha da esquerda */
+  try{ var corner=_map._controlCorners['topleft'], el=C.getContainer(); corner.insertBefore(el, corner.firstChild); }catch(e){}
 }
 /* ---- Bot\u00e3o \u2630 Menu no canto superior direito do mapa ---- */
 function addMenuControl(){
