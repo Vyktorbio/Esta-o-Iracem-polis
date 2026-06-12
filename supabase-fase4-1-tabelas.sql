@@ -81,7 +81,7 @@ create table if not exists public.locais (
   id         text primary key,
   nome       text not null,
   centro     jsonb,
-  zoom       int,
+  zoom       numeric,   -- zoom contínuo do mapa (pode ser fracionário, ex.: 17.92)
   extras     jsonb not null default '{}',
   client_ts  bigint,
   updated_at timestamptz not null default now(),

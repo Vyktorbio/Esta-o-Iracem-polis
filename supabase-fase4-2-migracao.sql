@@ -15,6 +15,10 @@
 --  Pula quadras com lápide de exclusão mais nova que a criação (excluídas).
 -- ============================================================================
 
+-- quem rodou a etapa 1 antes de 12/06: a coluna zoom era int; o zoom contínuo
+-- do mapa é fracionário (ex.: 17.92) -> corrige o tipo (inofensivo se já for numeric)
+alter table public.locais alter column zoom type numeric;
+
 -- datas podem vir como AAAA-MM-DD (padrão) ou DD/MM/AAAA (legado)
 create or replace function public._f4_data(t text)
 returns date language plpgsql immutable as $$
@@ -54,8 +58,8 @@ begin
   -- ---------------------------------------------------------------- LOCAIS
   for k, v in select * from jsonb_each(coalesce(st->'locais','{}'::jsonb)) loop
     insert into public.locais (id, nome, centro, zoom, client_ts)
-    values (k, coalesce(v->>'nome', k), v->'centro', nullif(v->>'zoom','')::int,
-            nullif(st->'locaists'->>k,'')::bigint)
+    values (k, coalesce(v->>'nome', k), v->'centro', nullif(v->>'zoom','')::numeric,
+            round(nullif(st->'locaists'->>k,'')::numeric)::bigint)
     on conflict (id) do update
       set nome=excluded.nome, centro=excluded.centro, zoom=excluded.zoom,
           client_ts=excluded.client_ts;
@@ -68,7 +72,7 @@ begin
   for qid in select jsonb_object_keys(coalesce(st->'qgeo','{}'::jsonb)) loop
     -- lápide mais nova que a criação = quadra excluída: não migra
     if delq ? qid and
-       coalesce(nullif(st->'qgeots'->>qid,'')::bigint, 0)
+       coalesce(round(nullif(st->'qgeots'->>qid,'')::numeric)::bigint, 0)
          <= coalesce(nullif(delq->>qid,'')::bigint, 0) then
       continue;
     end if;
@@ -98,7 +102,7 @@ begin
         else '[]'::jsonb
       end,
       q - 'estudos' - 'culturas' - '_deletedStudies',
-      coalesce(nullif(q->>'_ts','')::bigint, nullif(st->'qgeots'->>qid,'')::bigint)
+      coalesce(round(nullif(q->>'_ts','')::numeric)::bigint, round(nullif(st->'qgeots'->>qid,'')::numeric)::bigint)
     )
     on conflict (id) do update
       set local_id=excluded.local_id, nome=excluded.nome, geo=excluded.geo,
@@ -116,16 +120,16 @@ begin
         values (
           est->>'id', qid, est->>'codigo', est->>'nome', est->>'descricao',
           public._f4_data(est->>'dataInicio'),
-          nullif(est->>'numAplicacoes','')::int,
-          nullif(est->>'intervaloDias','')::int,
-          nullif(est->>'numRepeticoes','')::int,
+          round(nullif(est->>'numAplicacoes','')::numeric)::int,
+          round(nullif(est->>'intervaloDias','')::numeric)::int,
+          round(nullif(est->>'numRepeticoes','')::numeric)::int,
           coalesce(est->'tratamentos','[]'::jsonb),
           est->'randomizacao',
           coalesce(est->'auditLog','[]'::jsonb),
           (est - 'aplicacoes' - 'avaliacoes' - 'tratamentos' - 'randomizacao' - 'auditLog'
                - 'id' - 'codigo' - 'nome' - 'descricao' - 'dataInicio'
                - 'numAplicacoes' - 'intervaloDias' - 'numRepeticoes'),
-          nullif(est->>'_ts','')::bigint
+          round(nullif(est->>'_ts','')::numeric)::bigint
         )
         on conflict (id) do update
           set quadra_id=excluded.quadra_id, codigo=excluded.codigo, nome=excluded.nome,
@@ -145,7 +149,7 @@ begin
               ap->>'id', est->>'id', public._f4_data(ap->>'data'),
               ap->>'bbch', ap->>'obs', ap->'carimbo',
               (ap - 'id' - 'data' - 'bbch' - 'obs' - 'carimbo'),
-              nullif(ap->>'_ts','')::bigint
+              round(nullif(ap->>'_ts','')::numeric)::bigint
             )
             on conflict (id) do update
               set estudo_id=excluded.estudo_id, data=excluded.data, bbch=excluded.bbch,
@@ -170,7 +174,7 @@ begin
               av->'carimbo',
               (av - 'id' - 'data' - 'tipo' - 'bbch' - 'obs' - 'auto'
                   - 'variaveis' - 'tipos' - 'carimbo' - 'notas' - 'notasMeta'),
-              nullif(av->>'_ts','')::bigint
+              round(nullif(av->>'_ts','')::numeric)::bigint
             )
             on conflict (id) do update
               set estudo_id=excluded.estudo_id, data=excluded.data, tipo=excluded.tipo,
@@ -191,7 +195,7 @@ begin
                     (avaliacao_id, parcela, variavel, valor, client_ts)
                   values (
                     av->>'id', parc, vari, linha->>vari,
-                    nullif(meta->>'ts','')::bigint
+                    round(nullif(meta->>'ts','')::numeric)::bigint
                   )
                   on conflict (avaliacao_id, parcela, variavel) do update
                     set valor=excluded.valor, client_ts=excluded.client_ts;
@@ -223,7 +227,7 @@ begin
         (item - 'id' - 'localId' - 'quadraId' - 'lat' - 'lng' - 'titulo'
               - 'categoria' - 'severidade' - 'recomendacao' - 'descricao'
               - 'foto' - 'criadoEm' - 'resolvido'),
-        nullif(item->>'_ts','')::bigint
+        round(nullif(item->>'_ts','')::numeric)::bigint
       )
       on conflict (id) do update
         set local_id=excluded.local_id, quadra_id=excluded.quadra_id,
