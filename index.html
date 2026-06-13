@@ -3049,7 +3049,8 @@ function shadowSync(){
    Grava no blob (verdade atual) E, EM PARALELO, nas tabelas por-linha. SÓ roda com a
    flag _dualWrite LIGADA (padrão DESLIGADA → dormente p/ o usuário). Best-effort: NUNCA
    quebra o salvar do blob (tudo em try/catch). Fila offline (IndexedDB) sobe quando há rede. */
-function _dwOn(){ try{ return window._dualWrite===true || localStorage.getItem('agracta-dualwrite')==='1'; }catch(e){ return window._dualWrite===true; } }
+/* LIGADA por padrão (warming de produção). Kill-switch: setDualWrite(false) grava '0'. */
+function _dwOn(){ try{ if(window._dualWrite===false) return false; return localStorage.getItem('agracta-dualwrite')!=='0'; }catch(e){ return window._dualWrite!==false; } }
 function setDualWrite(on){ window._dualWrite=!!on; try{ localStorage.setItem('agracta-dualwrite', on?'1':'0'); }catch(e){} if(on) outboxFlush(); return _dwOn(); }
 function _f4date(t){ if(!t) return null; t=String(t); if(/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0,10); var m=t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); if(m) return m[3]+'-'+m[2]+'-'+m[1]; return null; }
 function _f4int(x){ if(x===''||x==null) return null; var n=parseInt(x,10); return isNaN(n)?null:n; }
@@ -3104,6 +3105,10 @@ function dbUpsertAvaliacao(qid, sid, av){
     outboxAdd(ops);
   }catch(e){}
 }
+function _rowAplicacao(sid, ap){ var skip={id:1,data:1,bbch:1,obs:1,carimbo:1}; var ex={}; for(var k in ap){ if(!skip[k]) ex[k]=ap[k]; } return { id:ap.id, estudo_id:sid, data:_f4date(ap.data), bbch:ap.bbch||null, obs:ap.obs||null, carimbo:ap.carimbo||null, extras:ex, client_ts:ap._ts||Date.now() }; }
+function dbUpsertQuadra(qid){ if(!_dwOn()||!qid||qid==='__config') return; try{ outboxAdd([{table:'locais',row:_rowLocal((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis')},{table:'quadras',row:_rowQuadra(qid)}]); }catch(e){} }
+function dbUpsertEstudo(qid, est){ if(!_dwOn()||!est||!est.id) return; try{ outboxAdd([{table:'locais',row:_rowLocal((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis')},{table:'quadras',row:_rowQuadra(qid)},{table:'estudos',row:_rowEstudo(qid,est)}]); }catch(e){} }
+function dbUpsertAplicacao(qid, sid, ap){ if(!_dwOn()||!ap||!ap.id) return; try{ var est=((typeof data!=='undefined'&&data[qid]&&(data[qid].estudos||[]).find(function(s){return s.id===sid;}))||{id:sid}); outboxAdd([{table:'locais',row:_rowLocal((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis')},{table:'quadras',row:_rowQuadra(qid)},{table:'estudos',row:_rowEstudo(qid,est)},{table:'aplicacoes',row:_rowAplicacao(sid,ap)}]); }catch(e){} }
 if(!window.__obNet){ window.__obNet=true; try{ window.addEventListener('online', function(){ try{outboxFlush();}catch(e){} }); document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible'){ try{outboxFlush();}catch(e){} } }); }catch(e){} }
 
 function render(){
@@ -4728,7 +4733,9 @@ function saveE(){
     _deletedStudies:prev._deletedStudies, /* preserva lápides de estudos (antes, editar a quadra as apagava) */
     _ts:Date.now() /* carimbo: no merge, a edição mais nova vence */
   };
-  save();closeEdit();render();renderLeg();updateAgendaBadge();
+  save();
+  try{ if(typeof dbUpsertQuadra==='function') dbUpsertQuadra(curE); }catch(e){} /* Etapa 3 Fase B */
+  closeEdit();render();renderLeg();updateAgendaBadge();
   if(curV)showD(curV);
 }
 
@@ -4875,6 +4882,7 @@ function saveStudy(){
   if(idx>=0)q.estudos[idx]=s; else q.estudos.push(s);
   data[curS]=q;
   save();
+  try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(curS, s); }catch(e){} /* Etapa 3 Fase B */
   var qid=curS;
   closeStudyEdit();
   render();updateAgendaBadge();
@@ -6140,6 +6148,7 @@ function saveStudyV2(){
   else q.estudos.push(s);
 
   save();
+  try{ if(typeof dbUpsertEstudo==='function') dbUpsertEstudo(curV, s); }catch(e){} /* Etapa 3 Fase B */
   closeStudyEditV2();
   openStudyDetail(curV,s.id);
 }
@@ -6399,6 +6408,7 @@ function saveAplicacao(){
   ap._ts=Date.now(); /* carimbo: no merge, a edição mais nova vence */
   logStudyAuditInObject(study, action, details);
   save();
+  try{ if(typeof dbUpsertAplicacao==='function') dbUpsertAplicacao(curV,curSid,ap); }catch(e){} /* Etapa 3 Fase B */
   if(typeof updateTodayBadge==='function') updateTodayBadge();
   if(typeof updateAgendaBadge==='function') updateAgendaBadge();
   closeEventEdit();
