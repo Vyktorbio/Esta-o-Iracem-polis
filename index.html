@@ -2952,6 +2952,99 @@ function cloudStart(){
   }
 }
 
+/* ===================== ETAPA 3 — FASE A: leitura por-linha + sombra =====================
+   SÓ LEITURA. Lê as tabelas normalizadas (Fase 4), reconstrói o estado no MESMO formato
+   do blob e COMPARA com o estado atual, sem tocar em nada que grava. Roda apenas quando
+   chamado de propósito (window.shadowSync()) — nunca no fluxo normal do usuário.
+   Objetivo: provar que as tabelas reproduzem 100% o estado antes de qualquer corte. */
+function _dbReadAll(){
+  if(!cloudInit()||!SB) return Promise.reject('sem conexão');
+  function all(tab, cols){ // pagina de 1000 em 1000 (lancamentos pode passar disso)
+    return new Promise(function(res){
+      var out=[], from=0, page=1000;
+      (function next(){
+        SB.from(tab).select(cols).range(from, from+page-1).then(function(r){
+          if(r.error){ res({error:r.error.message, rows:out}); return; }
+          out=out.concat(r.data||[]);
+          if((r.data||[]).length===page){ from+=page; next(); } else res({rows:out});
+        }, function(e){ res({error:String(e), rows:out}); });
+      })();
+    });
+  }
+  return Promise.all([
+    all('locais','*'), all('quadras','*'), all('estudos','*'),
+    all('aplicacoes','*'), all('avaliacoes','*'),
+    all('lancamentos','avaliacao_id,parcela,variavel,valor,client_ts'),
+    all('notas_campo','*'), all('randomizacoes','*'), all('config','*')
+  ]).then(function(a){
+    return { locais:a[0], quadras:a[1], estudos:a[2], aplicacoes:a[3],
+             avaliacoes:a[4], lancamentos:a[5], notas_campo:a[6], randomizacoes:a[7], config:a[8] };
+  });
+}
+/* reconstrói o estado (formato do blob) a partir das linhas das tabelas */
+function _dbBuildState(R){
+  var S={ data:{}, qgeo:{}, qgeots:{}, qnome:{}, qlocal:{}, locais:{}, locaists:{},
+          randomizacoes:[], notas_campo:[], georef:null };
+  (R.locais.rows||[]).forEach(function(r){ S.locais[r.id]=Object.assign({}, r.extras||{}, {nome:r.nome, centro:r.centro, zoom:(r.zoom!=null?Number(r.zoom):undefined)}); if(r.client_ts!=null)S.locaists[r.id]=Number(r.client_ts); });
+  (R.quadras.rows||[]).forEach(function(r){
+    S.qgeo[r.id]=r.geo; if(r.client_ts!=null)S.qgeots[r.id]=Number(r.client_ts);
+    S.qnome[r.id]=r.nome; S.qlocal[r.id]=r.local_id;
+    var d=Object.assign({}, r.extras||{}); d.culturas=r.culturas||[];
+    if(d.area==null && r.area_ha!=null) d.area=r.area_ha; d.estudos=[]; S.data[r.id]=d;
+  });
+  var estById={};
+  (R.estudos.rows||[]).forEach(function(e){
+    var est=Object.assign({}, e.extras||{}, { id:e.id, codigo:e.codigo, nome:e.nome, descricao:e.descricao,
+      dataInicio:e.data_inicio, numAplicacoes:e.num_aplicacoes, intervaloDias:e.intervalo_dias,
+      numRepeticoes:e.num_repeticoes, tratamentos:e.tratamentos||[], randomizacao:e.randomizacao,
+      auditLog:e.audit||[], _ts:(e.client_ts!=null?Number(e.client_ts):undefined), aplicacoes:[], avaliacoes:[] });
+    estById[e.id]=est; if(S.data[e.quadra_id]) S.data[e.quadra_id].estudos.push(est);
+  });
+  (R.aplicacoes.rows||[]).forEach(function(a){ var e=estById[a.estudo_id]; if(!e)return;
+    e.aplicacoes.push(Object.assign({}, a.extras||{}, {id:a.id, data:a.data, bbch:a.bbch, obs:a.obs, carimbo:a.carimbo, _ts:(a.client_ts!=null?Number(a.client_ts):undefined)})); });
+  var avById={};
+  (R.avaliacoes.rows||[]).forEach(function(av){ var e=estById[av.estudo_id]; if(!e)return;
+    var id=av.id; if(id&&id.indexOf(av.estudo_id+':auto_')===0) id=id.slice(av.estudo_id.length+1);
+    var a=Object.assign({}, av.extras||{}, {id:id, data:av.data, tipo:av.tipo, bbch:av.bbch, obs:av.obs,
+      auto:av.auto, variaveis:av.variaveis||[], tipos:av.tipos||{}, carimbo:av.carimbo,
+      _ts:(av.client_ts!=null?Number(av.client_ts):undefined), notas:{}, notasMeta:{}});
+    e.avaliacoes.push(a); avById[av.id]=a; });
+  (R.lancamentos.rows||[]).forEach(function(l){ var a=avById[l.avaliacao_id]; if(!a)return;
+    (a.notas[l.parcela]=a.notas[l.parcela]||{})[l.variavel]=l.valor;
+    (a.notasMeta[l.parcela]=a.notasMeta[l.parcela]||{})[l.variavel]={ts:(l.client_ts!=null?Number(l.client_ts):0)}; });
+  S.notas_campo=(R.notas_campo.rows||[]).map(function(r){ return Object.assign({}, r.extras||{}, {id:r.id, localId:r.local_id, quadraId:r.quadra_id, lat:r.lat, lng:r.lng, titulo:r.titulo, categoria:r.categoria, severidade:r.severidade, recomendacao:r.recomendacao, descricao:r.descricao, foto:r.foto_b64, criadoEm:r.criado_em, resolvido:r.resolvido, _ts:(r.client_ts!=null?Number(r.client_ts):undefined)}); });
+  S.randomizacoes=(R.randomizacoes.rows||[]).map(function(r){ return r.dados; });
+  var cfg=(R.config.rows||[]).find(function(r){return r.id===1;}); if(cfg&&cfg.dados) S.data.__config=cfg.dados;
+  return S;
+}
+function _countCells(stateData){ var n=0; Object.keys(stateData||{}).forEach(function(k){ if(k==='__config')return; (stateData[k].estudos||[]).forEach(function(e){ (e.avaliacoes||[]).forEach(function(a){ var no=a.notas||{}; Object.keys(no).forEach(function(tr){ Object.keys(no[tr]||{}).forEach(function(v){ if(no[tr][v]!=='' && no[tr][v]!=null) n++; }); }); }); }); }); return n; }
+function _countEnt(stateData){ var e=0,ap=0,av=0; Object.keys(stateData||{}).forEach(function(k){ if(k==='__config')return; (stateData[k].estudos||[]).forEach(function(s){ e++; ap+=(s.aplicacoes||[]).length; av+=(s.avaliacoes||[]).length; }); }); return {estudos:e,aplicacoes:ap,avaliacoes:av}; }
+/* Compara tabelas (T) x blob atual (B). Loga relatório e devolve o objeto. */
+function shadowSync(){
+  console.log('[shadow] lendo tabelas por-linha…');
+  return _dbReadAll().then(function(R){
+    var errs=Object.keys(R).filter(function(k){return R[k].error;}).map(function(k){return k+': '+R[k].error;});
+    var T=_dbBuildState(R);
+    var B=(typeof cloudState==='function')?cloudState():{data:data,qgeo:QGEO,locais:LOCAIS,randomizacoes:RZLIB,notas_campo:NOTAS_CAMPO};
+    var bq=Object.keys(B.data||{}).filter(function(k){return k!=='__config';}).length;
+    var tq=Object.keys(T.data||{}).filter(function(k){return k!=='__config';}).length;
+    var bc=_countEnt(B.data), tc=_countEnt(T.data);
+    // fidelidade no overlap de avaliações (mesmo estudo+id): % de células iguais
+    var bAv={}; Object.keys(B.data||{}).forEach(function(qid){ if(qid==='__config')return; (B.data[qid].estudos||[]).forEach(function(s){ (s.avaliacoes||[]).forEach(function(a){ bAv[s.id+'|'+a.id]=a; }); }); });
+    var overlap=0, cellsBoth=0, cellsEqual=0, avDiff=[];
+    Object.keys(T.data||{}).forEach(function(qid){ if(qid==='__config')return; (T.data[qid].estudos||[]).forEach(function(s){ (s.avaliacoes||[]).forEach(function(ta){ var ba=bAv[s.id+'|'+ta.id]; if(!ba)return; overlap++; var tn=ta.notas||{}, bn=ba.notas||{}; var rows={}; Object.keys(tn).forEach(function(r){rows[r]=1;}); Object.keys(bn).forEach(function(r){rows[r]=1;}); var d=0; Object.keys(rows).forEach(function(r){ var tr=tn[r]||{}, br=bn[r]||{}; var cols={}; Object.keys(tr).forEach(function(c){cols[c]=1;}); Object.keys(br).forEach(function(c){cols[c]=1;}); Object.keys(cols).forEach(function(c){ var tv=tr[c], bv=br[c]; if(tv!=null&&tv!==''||bv!=null&&bv!==''){ cellsBoth++; if(String(tv==null?'':tv)===String(bv==null?'':bv)) cellsEqual++; else d++; } }); }); if(d) avDiff.push(s.id+'|'+ta.id+' ('+d+' células diferentes)'); }); }); });
+    var rep={
+      erros_leitura: errs,
+      contagens:{ quadras:{blob:bq, tabelas:tq}, estudos:{blob:bc.estudos, tabelas:tc.estudos}, aplicacoes:{blob:bc.aplicacoes, tabelas:tc.aplicacoes}, avaliacoes:{blob:bc.avaliacoes, tabelas:tc.avaliacoes}, celulas:{blob:_countCells(B.data), tabelas:_countCells(T.data)}, locais:{blob:Object.keys(B.locais||{}).length, tabelas:Object.keys(T.locais||{}).length}, notas_campo:{blob:(B.notas_campo||[]).length, tabelas:(T.notas_campo||[]).length}, randomizacoes:{blob:(B.randomizacoes||[]).length, tabelas:(T.randomizacoes||[]).length} },
+      georef:{ blob_tem: !!(B.georef||(typeof _geo!=='undefined'&&_geo)), tabelas_tem: !!T.georef },
+      fidelidade_avaliacoes_no_overlap:{ avaliacoes_em_ambos:overlap, celulas_comparadas:cellsBoth, celulas_iguais:cellsEqual, pct: cellsBoth?(Math.round(cellsEqual/cellsBoth*1000)/10+'%'):'n/a', avaliacoes_com_diferenca:avDiff.slice(0,20) }
+    };
+    console.log('[shadow] RELATÓRIO', rep);
+    window._shadowRep=rep; window._shadowT=T;
+    return rep;
+  });
+}
+
 function render(){
   initMap();
   if(!_qLayer) return;
