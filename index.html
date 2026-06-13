@@ -2985,8 +2985,9 @@ function _dbReadAll(){
 function _dbBuildState(R){
   var S={ data:{}, qgeo:{}, qgeots:{}, qnome:{}, qlocal:{}, locais:{}, locaists:{},
           randomizacoes:[], notas_campo:[], georef:null };
-  (R.locais.rows||[]).forEach(function(r){ S.locais[r.id]=Object.assign({}, r.extras||{}, {nome:r.nome, centro:r.centro, zoom:(r.zoom!=null?Number(r.zoom):undefined)}); if(r.client_ts!=null)S.locaists[r.id]=Number(r.client_ts); });
+  (R.locais.rows||[]).forEach(function(r){ if(r.deleted_at) return; S.locais[r.id]=Object.assign({}, r.extras||{}, {nome:r.nome, centro:r.centro, zoom:(r.zoom!=null?Number(r.zoom):undefined)}); if(r.client_ts!=null)S.locaists[r.id]=Number(r.client_ts); });
   (R.quadras.rows||[]).forEach(function(r){
+    if(r.deleted_at) return;
     S.qgeo[r.id]=r.geo; if(r.client_ts!=null)S.qgeots[r.id]=Number(r.client_ts);
     S.qnome[r.id]=r.nome; S.qlocal[r.id]=r.local_id;
     var d=Object.assign({}, r.extras||{}); d.culturas=r.culturas||[];
@@ -2994,16 +2995,17 @@ function _dbBuildState(R){
   });
   var estById={};
   (R.estudos.rows||[]).forEach(function(e){
+    if(e.deleted_at) return;
     var est=Object.assign({}, e.extras||{}, { id:e.id, codigo:e.codigo, nome:e.nome, descricao:e.descricao,
       dataInicio:e.data_inicio, numAplicacoes:e.num_aplicacoes, intervaloDias:e.intervalo_dias,
       numRepeticoes:e.num_repeticoes, tratamentos:e.tratamentos||[], randomizacao:e.randomizacao,
       auditLog:e.audit||[], _ts:(e.client_ts!=null?Number(e.client_ts):undefined), aplicacoes:[], avaliacoes:[] });
     estById[e.id]=est; if(S.data[e.quadra_id]) S.data[e.quadra_id].estudos.push(est);
   });
-  (R.aplicacoes.rows||[]).forEach(function(a){ var e=estById[a.estudo_id]; if(!e)return;
+  (R.aplicacoes.rows||[]).forEach(function(a){ if(a.deleted_at) return; var e=estById[a.estudo_id]; if(!e)return;
     e.aplicacoes.push(Object.assign({}, a.extras||{}, {id:a.id, data:a.data, bbch:a.bbch, obs:a.obs, carimbo:a.carimbo, _ts:(a.client_ts!=null?Number(a.client_ts):undefined)})); });
   var avById={};
-  (R.avaliacoes.rows||[]).forEach(function(av){ var e=estById[av.estudo_id]; if(!e)return;
+  (R.avaliacoes.rows||[]).forEach(function(av){ if(av.deleted_at) return; var e=estById[av.estudo_id]; if(!e)return;
     var id=av.id; if(id&&id.indexOf(av.estudo_id+':auto_')===0) id=id.slice(av.estudo_id.length+1);
     var a=Object.assign({}, av.extras||{}, {id:id, data:av.data, tipo:av.tipo, bbch:av.bbch, obs:av.obs,
       auto:av.auto, variaveis:av.variaveis||[], tipos:av.tipos||{}, carimbo:av.carimbo,
@@ -3012,9 +3014,15 @@ function _dbBuildState(R){
   (R.lancamentos.rows||[]).forEach(function(l){ var a=avById[l.avaliacao_id]; if(!a)return;
     (a.notas[l.parcela]=a.notas[l.parcela]||{})[l.variavel]=l.valor;
     (a.notasMeta[l.parcela]=a.notasMeta[l.parcela]||{})[l.variavel]={ts:(l.client_ts!=null?Number(l.client_ts):0)}; });
-  S.notas_campo=(R.notas_campo.rows||[]).map(function(r){ return Object.assign({}, r.extras||{}, {id:r.id, localId:r.local_id, quadraId:r.quadra_id, lat:r.lat, lng:r.lng, titulo:r.titulo, categoria:r.categoria, severidade:r.severidade, recomendacao:r.recomendacao, descricao:r.descricao, foto:r.foto_b64, criadoEm:r.criado_em, resolvido:r.resolvido, _ts:(r.client_ts!=null?Number(r.client_ts):undefined)}); });
-  S.randomizacoes=(R.randomizacoes.rows||[]).map(function(r){ return r.dados; });
-  var cfg=(R.config.rows||[]).find(function(r){return r.id===1;}); if(cfg&&cfg.dados) S.data.__config=cfg.dados;
+  S.notas_campo=(R.notas_campo.rows||[]).filter(function(r){return !r.deleted_at;}).map(function(r){ return Object.assign({}, r.extras||{}, {id:r.id, localId:r.local_id, quadraId:r.quadra_id, lat:r.lat, lng:r.lng, titulo:r.titulo, categoria:r.categoria, severidade:r.severidade, recomendacao:r.recomendacao, descricao:r.descricao, foto:r.foto_b64, criadoEm:r.criado_em, resolvido:r.resolvido, _ts:(r.client_ts!=null?Number(r.client_ts):undefined)}); });
+  S.randomizacoes=(R.randomizacoes.rows||[]).filter(function(r){return !r.deleted_at;}).map(function(r){ return r.dados; });
+  var cfg=(R.config.rows||[]).find(function(r){return r.id===1;});
+  if(cfg&&cfg.dados){ var dd=cfg.dados;
+    if(dd._georef!==undefined || dd._georefts!==undefined){ /* corte v2: georef vem dentro do config */
+      S.georef=dd._georef||null; S.georefts=dd._georefts;
+      var cc=Object.assign({}, dd); delete cc._georef; delete cc._georefts; S.data.__config=cc;
+    } else { S.data.__config=dd; }
+  }
   return S;
 }
 function _countCells(stateData){ var n=0; Object.keys(stateData||{}).forEach(function(k){ if(k==='__config')return; (stateData[k].estudos||[]).forEach(function(e){ (e.avaliacoes||[]).forEach(function(a){ var no=a.notas||{}; Object.keys(no).forEach(function(tr){ Object.keys(no[tr]||{}).forEach(function(v){ if(no[tr][v]!=='' && no[tr][v]!=null) n++; }); }); }); }); }); return n; }
