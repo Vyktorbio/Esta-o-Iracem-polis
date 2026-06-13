@@ -498,8 +498,9 @@ body{font-family:var(--font);color:var(--text);-webkit-font-smoothing:antialiase
 .toolbar-extra button:active{transform:translateY(1px)}
 .toolbar-extra button[onclick*="toggleNdvi"]{color:var(--accent);border-color:#244a36}
 /* ---- FAB: ferramentas do mapa agrupadas (fechado = só o botão; aberto = leque) ---- */
-.toolbar-extra .tool-item{max-width:0;padding-left:0;padding-right:0;border-width:0;opacity:0;transform:scale(.8);overflow:hidden;pointer-events:none;transition:max-width .22s ease,padding .22s ease,opacity .18s ease,transform .18s ease}
-.toolbar-extra.open .tool-item{max-width:64px;padding-left:16px;padding-right:16px;border-width:1px;opacity:1;transform:none;pointer-events:auto}
+.toolbar-extra .tool-item{max-width:0;margin-left:0;padding-left:0;padding-right:0;border-width:0;opacity:0;transform:scale(.8);overflow:hidden;pointer-events:none;transition:max-width .22s ease,margin .22s ease,padding .22s ease,opacity .18s ease,transform .18s ease}
+.toolbar-extra.open .tool-item{max-width:64px;margin-left:6px;padding-left:16px;padding-right:16px;border-width:1px;opacity:1;transform:none;pointer-events:auto}
+.toolbar-extra.open .tool-fab{margin-left:6px} /* separa o FAB do último item só quando aberto; recolhido fica colado (sem aba) */
 .toolbar-extra .fab-close{display:none}
 .toolbar-extra.open .fab-close{display:inline-flex}
 .toolbar-extra.open .fab-open{display:none}
@@ -780,7 +781,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
 .toolbar-extra{
   right:14px!important;
   bottom:14px!important;
-  gap:6px!important;
+  gap:0!important; /* espaçamento via margin dos itens — gap reservava espaço entre os itens RECOLHIDOS (a "aba" branca ao lado do ícone) */
   padding:6px!important;
   border-radius:13px!important;
   background:rgba(255,255,255,.92)!important;
@@ -966,7 +967,7 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe U
   .top-bar-info{display:none!important}
   .loc-chip{max-width:50vw!important}
   .loc-chip .sub,.loc-chip .car{display:none!important}
-  .toolbar-extra{left:auto!important;right:10px!important;bottom:10px!important;display:flex!important;gap:6px!important}
+  .toolbar-extra{left:auto!important;right:10px!important;bottom:10px!important;display:flex!important;gap:0!important}
   .toolbar-extra button{min-width:0!important;height:auto!important;padding:0!important}
   .tool-ico{display:inline-flex!important;height:42px;width:42px;min-width:42px;font-size:12px}
   .panel,.edit-panel,.se-panel{max-width:calc(100vw - 18px)!important}
