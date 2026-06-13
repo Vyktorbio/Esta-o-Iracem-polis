@@ -3045,6 +3045,67 @@ function shadowSync(){
   });
 }
 
+/* ===================== ETAPA 3 — FASE B: escrita dupla + outbox =====================
+   Grava no blob (verdade atual) E, EM PARALELO, nas tabelas por-linha. SÓ roda com a
+   flag _dualWrite LIGADA (padrão DESLIGADA → dormente p/ o usuário). Best-effort: NUNCA
+   quebra o salvar do blob (tudo em try/catch). Fila offline (IndexedDB) sobe quando há rede. */
+function _dwOn(){ try{ return window._dualWrite===true || localStorage.getItem('agracta-dualwrite')==='1'; }catch(e){ return window._dualWrite===true; } }
+function setDualWrite(on){ window._dualWrite=!!on; try{ localStorage.setItem('agracta-dualwrite', on?'1':'0'); }catch(e){} if(on) outboxFlush(); return _dwOn(); }
+function _f4date(t){ if(!t) return null; t=String(t); if(/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0,10); var m=t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); if(m) return m[3]+'-'+m[2]+'-'+m[1]; return null; }
+function _f4int(x){ if(x===''||x==null) return null; var n=parseInt(x,10); return isNaN(n)?null:n; }
+var _OB_DB='agracta-outbox', _OB_STORE='ops';
+function _obOpen(){ return new Promise(function(res,rej){ try{ if(!window.indexedDB){rej('sem idb');return;} var rq=indexedDB.open(_OB_DB,1); rq.onupgradeneeded=function(e){ var db=e.target.result; if(!db.objectStoreNames.contains(_OB_STORE)){ db.createObjectStore(_OB_STORE,{keyPath:'k',autoIncrement:true}); } }; rq.onsuccess=function(){res(rq.result);}; rq.onerror=function(){rej(rq.error);}; }catch(e){rej(e);} }); }
+function outboxAdd(ops){ if(!ops||!ops.length) return; try{ _obOpen().then(function(db){ try{ var tx=db.transaction(_OB_STORE,'readwrite'), os=tx.objectStore(_OB_STORE); ops.forEach(function(o){ os.add(o); }); tx.oncomplete=function(){ try{db.close();}catch(_){} if(navigator.onLine) outboxFlush(); }; tx.onerror=function(){ try{db.close();}catch(_){} }; }catch(_){ try{db.close();}catch(__){} } }, function(){}); }catch(e){} }
+var _obFlushing=false;
+function outboxFlush(){
+  if(_obFlushing) return; if(!cloudInit()||!SB||!navigator.onLine) return; _obFlushing=true;
+  _obOpen().then(function(db){
+    var all=[]; try{ var tx=db.transaction(_OB_STORE,'readonly'), cur=tx.objectStore(_OB_STORE).openCursor();
+      cur.onsuccess=function(e){ var c=e.target.result; if(c){ var v=c.value; v.k=c.key; all.push(v); c.continue(); } else { _obProcess(db, all); } };
+      cur.onerror=function(){ try{db.close();}catch(_){} _obFlushing=false; };
+    }catch(_){ try{db.close();}catch(__){} _obFlushing=false; }
+  }, function(){ _obFlushing=false; });
+}
+function _obProcess(db, ops){
+  var i=0;
+  function del(k){ try{ var tx=db.transaction(_OB_STORE,'readwrite'); tx.objectStore(_OB_STORE).delete(k); }catch(e){} }
+  function step(){
+    if(i>=ops.length){ try{db.close();}catch(_){} _obFlushing=false; return; }
+    var o=ops[i++]; if(!o||!o.table){ del(o&&o.k); return step(); }
+    var q;
+    try{ q=SB.from(o.table).upsert(o.row, {onConflict:o.onConflict||'id'}); }
+    catch(e){ return step(); }
+    q.then(function(r){ if(r&&r.error){ /* mantém p/ retry (ex.: FK ainda não chegou) */ } else { del(o.k); } step(); }, function(){ step(); });
+  }
+  step();
+}
+/* monta as linhas (revertendo o mapeamento da migração) */
+function _rowQuadra(qid){ var d=(typeof data!=='undefined'&&data[qid])||{}; var ex={}; for(var k in d){ if(k!=='estudos'&&k!=='culturas'&&k!=='_deletedStudies') ex[k]=d[k]; } return { id:qid, local_id:((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis'), nome:((typeof QNOME!=='undefined'&&QNOME[qid])||qid), geo:((typeof QGEO!=='undefined'&&QGEO[qid])||null), area_ha:(d.area!=null&&d.area!==''?Number(d.area):null), culturas:(d.culturas||[]), extras:ex, client_ts:((typeof QGEO_TS!=='undefined'&&QGEO_TS[qid])||Date.now()) }; }
+function _rowLocal(lid){ var L=(typeof LOCAIS!=='undefined'&&LOCAIS[lid])||{}; return { id:lid, nome:(L.nome||lid), centro:(L.centro||null), zoom:(L.zoom!=null?Number(L.zoom):null), client_ts:((typeof LOCAIS_TS!=='undefined'&&LOCAIS_TS[lid])||Date.now()) }; }
+function _rowEstudo(qid, est){ var skip={aplicacoes:1,avaliacoes:1,tratamentos:1,randomizacao:1,auditLog:1,id:1,codigo:1,nome:1,descricao:1,dataInicio:1,numAplicacoes:1,intervaloDias:1,numRepeticoes:1,_deletedStudies:1}; var ex={}; for(var k in est){ if(!skip[k]) ex[k]=est[k]; } return { id:est.id, quadra_id:qid, codigo:est.codigo||null, nome:est.nome||null, descricao:est.descricao||null, data_inicio:_f4date(est.dataInicio), num_aplicacoes:_f4int(est.numAplicacoes), intervalo_dias:_f4int(est.intervaloDias), num_repeticoes:_f4int(est.numRepeticoes), tratamentos:est.tratamentos||[], randomizacao:est.randomizacao||null, audit:est.auditLog||[], extras:ex, client_ts:est._ts||Date.now() }; }
+function _avTableId(sid, av){ return (av.id&&av.id.indexOf('auto_')===0)?(sid+':'+av.id):av.id; }
+function _rowAval(sid, av){ var skip={id:1,data:1,tipo:1,bbch:1,obs:1,auto:1,variaveis:1,tipos:1,carimbo:1,notas:1,notasMeta:1}; var ex={}; for(var k in av){ if(!skip[k]) ex[k]=av[k]; } return { id:_avTableId(sid,av), estudo_id:sid, data:_f4date(av.data), tipo:av.tipo||null, bbch:av.bbch||null, obs:av.obs||null, auto:!!av.auto, variaveis:av.variaveis||[], tipos:av.tipos||{}, carimbo:av.carimbo||null, extras:ex, client_ts:av._ts||Date.now() }; }
+/* hook do saveAvaliacao: enfileira a cadeia (local→quadra→estudo→avaliação→lançamentos) na ordem dos FKs */
+function dbUpsertAvaliacao(qid, sid, av){
+  if(!_dwOn()) return;
+  try{
+    var est=((typeof data!=='undefined'&&data[qid]&&(data[qid].estudos||[]).find(function(s){return s.id===sid;}))||{id:sid});
+    var avid=_avTableId(sid, av);
+    var ops=[];
+    ops.push({table:'locais', row:_rowLocal((typeof QLOCAL!=='undefined'&&QLOCAL[qid])||'iracemapolis')});
+    ops.push({table:'quadras', row:_rowQuadra(qid)});
+    ops.push({table:'estudos', row:_rowEstudo(qid, est)});
+    ops.push({table:'avaliacoes', row:_rowAval(sid, av)});
+    var notas=av.notas||{}, meta=av.notasMeta||{};
+    Object.keys(notas).forEach(function(parc){ Object.keys(notas[parc]||{}).forEach(function(vari){
+      var val=notas[parc][vari]; var ts=(meta[parc]&&meta[parc][vari]&&meta[parc][vari].ts)||av._ts||Date.now();
+      ops.push({table:'lancamentos', onConflict:'avaliacao_id,parcela,variavel', row:{avaliacao_id:avid, parcela:parc, variavel:vari, valor:(val===''?null:val), client_ts:ts}});
+    }); });
+    outboxAdd(ops);
+  }catch(e){}
+}
+if(!window.__obNet){ window.__obNet=true; try{ window.addEventListener('online', function(){ try{outboxFlush();}catch(e){} }); document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible'){ try{outboxFlush();}catch(e){} } }); }catch(e){} }
+
 function render(){
   initMap();
   if(!_qLayer) return;
@@ -7015,6 +7076,8 @@ function saveAvaliacao(){
   save();
   /* rede de segurança no aparelho: registra a avaliação no diário (IndexedDB). Best-effort, nunca quebra o salvar. */
   try{ journalAval({ ts:Date.now(), who:(typeof _authUser!=='undefined'&&_authUser&&_authUser.email)||'', qid:curV, quadra:(typeof quadraNome==='function'?quadraNome(curV):curV), sid:curSid, avid:av.id, data:av.data, tipo:av.tipo, bbch:av.bbch, variaveis:(av.variaveis||[]).slice(), notas:JSON.parse(JSON.stringify(av.notas||{})), notasMeta:JSON.parse(JSON.stringify(av.notasMeta||{})) }); }catch(e){}
+  /* Etapa 3 Fase B: escrita dupla nas tabelas por-linha (só com flag _dualWrite; nunca quebra o save do blob) */
+  try{ if(typeof dbUpsertAvaliacao==='function') dbUpsertAvaliacao(curV,curSid,av); }catch(e){}
   if(typeof updateTodayBadge==='function') updateTodayBadge();
   if(typeof updateAgendaBadge==='function') updateAgendaBadge();
   closeEventEdit();
