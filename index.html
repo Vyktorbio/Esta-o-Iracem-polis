@@ -7688,23 +7688,24 @@ function renderAdminDashboard(){
   if(!m) return;
   
   var conf = data.__config;
-  var users = conf.allowedUsers || [];
-  
-  var rows = users.length ? users.map(function(u, idx){
-    if(!u) return '';
-    return '<div style="border-bottom:1px solid #2a3a2a;padding:8px 0;display:flex;justify-content:space-between;align-items:center;gap:10px">'+
-      '<div style="min-width:0;text-align:left">'+
-        '<div style="font-weight:700;font-size:13px;color:#eaf3ed">'+esc(u.nome)+'</div>'+
-        '<div style="font-size:11px;color:#8aa88a">'+esc(u.email)+'</div>'+
-      '</div>'+
-      '<button onclick="removeAllowedUser('+idx+')" style="background:#5a1f1f;color:#faeaea;border:none;border-radius:6px;padding:5px 8px;font-size:11px;cursor:pointer">Remover</button>'+
-    '</div>';
-  }).join('') : '<div style="color:#8aa88a;font-size:12px;margin:12px 0;text-align:center">Nenhum técnico cadastrado ainda.</div>';
-  
+
+  /* Caixa de credenciais recém-criadas (sobrevive ao re-render) */
+  var ac = window._ultimoAcessoCriado;
+  var credsHtml = ac ? ('<div style="margin-top:12px;border:1px solid #2e7d3e;border-radius:10px;padding:10px;background:#0c1f12;text-align:left">'+
+    '<div style="font-weight:800;color:#37d684;margin-bottom:4px">✓ Acesso '+(ac.criado?'criado':'redefinido')+' &mdash; passe ao técnico</div>'+
+    '<div style="font-size:12px;color:#eaf3ed;line-height:1.7">E-mail: <b>'+esc(ac.email)+'</b><br>Senha: <b style="font-family:monospace;font-size:13px;letter-spacing:.5px">'+esc(ac.senha)+'</b></div>'+
+    '<div style="display:flex;gap:6px;margin-top:8px">'+
+      '<button onclick="_copiarCreds()" style="flex:1;background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:7px;font-weight:700;font-size:12px;cursor:pointer">Copiar credenciais</button>'+
+      '<button onclick="window._ultimoAcessoCriado=null;renderAdminDashboard()" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:7px;padding:7px 12px;font-size:12px;cursor:pointer">Ok</button>'+
+    '</div>'+
+    '<div style="font-size:10px;color:#8aa88a;margin-top:6px">O técnico entra em www.agracta.com.br com esse e-mail e senha.</div>'+
+  '</div>') : '';
+
   m.innerHTML = '<div style="background:#0e150e;border:1px solid #2a3a2a;border-radius:16px;max-width:460px;width:100%;padding:20px;box-sizing:border-box;color:#eaf3ed;font:13px system-ui,sans-serif;margin:12px auto;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#37d684;font-size:15px">⚙️ Painel do Administrador (Agracta)</b><button onclick="closeAdminDashboard()" style="background:none;border:none;color:#aaa;font-size:18px;cursor:pointer">✕</button></div>'+
     '<div style="font-size:11px;color:#8aa88a;margin-top:4px">Controle de acesso BPL para sincronização de dados.</div>'+
-    
+    credsHtml+
+
     '<div style="margin-top:14px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#111b13;text-align:left">'+
       '<div style="font-weight:700;color:#37d684;margin-bottom:6px">Configurações de Acesso Admin</div>'+
       '<div style="display:flex;flex-direction:column;gap:8px">'+
@@ -7717,24 +7718,32 @@ function renderAdminDashboard(){
     '</div>'+
     
     '<div style="margin-top:14px;text-align:left">'+
-      '<b style="color:#37d684">Técnicos Permitidos</b>'+
-      '<div style="max-height:160px;overflow-y:auto;margin-top:6px;border:1px solid #2a3a2a;border-radius:10px;padding:8px;background:#090f0a">'+
-        rows+
+      '<b style="color:#37d684">Técnicos (contas Supabase)</b>'+
+      '<div style="font-size:10px;color:#8aa88a;margin-top:2px">Nome vinculado ao e-mail para a auditoria BPL (quem avaliou/aplicou). Editável.</div>'+
+      '<div id="admPerfisList" style="max-height:230px;overflow-y:auto;margin-top:6px;border:1px solid #2a3a2a;border-radius:10px;padding:8px;background:#090f0a">'+
+        '<div style="color:#8aa88a;font-size:12px;text-align:center;padding:8px">Carregando contas…</div>'+
       '</div>'+
     '</div>'+
     
     '<div style="margin-top:12px;border:1px solid #2a3a2a;border-radius:10px;padding:10px;background:#111b13;text-align:left">'+
       '<div style="font-weight:700;color:#37d684;margin-bottom:6px">Autorizar Novo Técnico</div>'+
-      '<div style="font-size:10px;color:#8aa88a;line-height:1.45;margin-bottom:8px;background:#0c140d;border:1px solid #1f2c22;border-radius:8px;padding:7px 8px">O <b>login</b> (e-mail + senha) é criado no <b>Supabase</b> &rarr; Authentication. Aqui você mantém a <b>lista de autorizados</b> (registro BPL) com o mesmo e-mail. Esta lista sincroniza e <b>não some</b>.</div>'+
+      '<div style="font-size:10px;color:#8aa88a;line-height:1.45;margin-bottom:8px;background:#0c140d;border:1px solid #1f2c22;border-radius:8px;padding:7px 8px">Cria o <b>login</b> (e-mail + senha) do técnico <b>na hora</b>. Passe as credenciais a ele &mdash; entra em <b>www.agracta.com.br</b>. Se o e-mail já existir, isto <b>redefine a senha</b>.</div>'+
       '<div style="display:flex;gap:6px">'+
-        '<input id="addUsrEmail" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="email" placeholder="E-mail">'+
-        '<input id="addUsrNome" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="text" placeholder="Nome do Técnico">'+
+        '<input id="addUsrEmail" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="email" placeholder="E-mail" autocomplete="off" autocapitalize="none">'+
+        '<input id="addUsrNome" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="text" placeholder="Nome do Técnico" autocomplete="off">'+
       '</div>'+
-      '<button onclick="addAllowedUser()" style="width:100%;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:8px;font-weight:700;margin-top:8px;cursor:pointer">Autorizar Técnico</button>'+
+      '<div style="display:flex;gap:6px;margin-top:6px">'+
+        '<input id="addUsrSenha" class="delpwd-inp" style="padding:8px;font-size:12px;flex:1" type="text" placeholder="Senha (vazio = gerar)" autocomplete="off" autocapitalize="none">'+
+        '<button onclick="adminGenSenha()" style="background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:8px;padding:0 12px;font-weight:700;font-size:12px;cursor:pointer">Gerar</button>'+
+      '</div>'+
+      '<div id="addUsrMsg" style="font-size:11px;margin-top:7px;min-height:14px;color:#ff8a8a"></div>'+
+      '<button id="addUsrBtn" onclick="criarAcessoTecnico()" style="width:100%;background:#1f5a2a;color:#eafaea;border:none;border-radius:8px;padding:10px;font-weight:800;margin-top:4px;cursor:pointer">Criar acesso do técnico</button>'+
+      '<button onclick="addAllowedUser()" style="width:100%;background:transparent;color:#6f8f76;border:none;padding:6px;font-size:10px;cursor:pointer;margin-top:2px;text-decoration:underline">só registrar na lista (sem criar login)</button>'+
     '</div>'+
     
     '<div style="margin-top:14px"><button onclick="closeAdminDashboard()" style="width:100%;background:#16301c;color:#9ac49a;border:1px solid #2a3a2a;border-radius:9px;padding:10px;font-weight:700;cursor:pointer">Fechar e Sair</button></div>'+
   '</div>';
+  if(typeof _carregarPerfis==='function') _carregarPerfis();
 }
 
 function saveAdminSettings(){
@@ -7753,6 +7762,96 @@ function saveAdminSettings(){
   save(); if(typeof cloudSave==='function'){ try{ cloudSave(); }catch(e){} }
   _stxToast('Configurações salvas — aguarde "salvo na nuvem".');
   renderAdminDashboard();
+}
+
+/* ===== Contas de técnico (Supabase Auth + perfis): criar login, nome p/ auditoria, redefinir senha ===== */
+function _genSenhaTec(){ var cs='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789',s=''; for(var i=0;i<10;i++)s+=cs.charAt(Math.floor(Math.random()*cs.length)); return s; }
+function adminGenSenha(){ var i=document.getElementById('addUsrSenha'); if(i){ i.value=_genSenhaTec(); i.focus(); } }
+function _adminMsg(t,erro){ var e=document.getElementById('addUsrMsg'); if(e){ e.textContent=t||''; e.style.color=erro?'#ff8a8a':'#37d684'; } }
+function _copiarCreds(){ var ac=window._ultimoAcessoCriado; if(!ac)return; var t='Agracta — acesso\nSite: https://www.agracta.com.br\nE-mail: '+ac.email+'\nSenha: '+ac.senha;
+  function done(){ if(typeof _stxToast==='function')_stxToast('Credenciais copiadas'); }
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(done,function(){ window.prompt('Copie as credenciais:', t); }); } else { window.prompt('Copie as credenciais:', t); } }catch(e){ window.prompt('Copie as credenciais:', t); } }
+
+/* Chama a Edge Function 'criar-tecnico' (cria conta OU redefine senha). Segredo fica no servidor. */
+function _invocarCriarTecnico(email, nome, senha, isReset){
+  if(!cloudInit()||!SB||!SB.functions){ _adminMsg('Sem conexão com o servidor.',true); return; }
+  var btn=document.getElementById('addUsrBtn'); if(btn && !isReset){ btn.disabled=true; btn.textContent='Criando…'; }
+  if(!isReset) _adminMsg('Criando acesso…',false);
+  SB.functions.invoke('criar-tecnico',{ body:{ email:email, nome:nome, senha:senha } }).then(function(res){
+    if(btn && !isReset){ btn.disabled=false; btn.textContent='Criar acesso do técnico'; }
+    var d=res&&res.data, er=res&&res.error;
+    if(er || !d || d.error){
+      var msg=(d&&d.error) || (er&&er.message) || 'Falha ao criar acesso.';
+      if(/not found|404|Failed to send|fetch|non-2xx|Edge Function|FunctionsFetchError|FunctionsRelayError/i.test(String(msg))){
+        msg='A função "criar-tecnico" ainda não foi publicada no Supabase. (Me avise que te passo o passo de 2 min.)';
+      }
+      _adminMsg(msg,true); if(isReset && typeof _stxToast==='function')_stxToast(msg); return;
+    }
+    window._ultimoAcessoCriado={ email:d.email||email, senha:d.senha||senha, criado:!!d.criado };
+    /* espelha no roster BPL local (allowedUsers) por continuidade do registro */
+    try{ ensureConfig(); var arr=data.__config.allowedUsers||(data.__config.allowedUsers=[]);
+      var f=arr.find(function(u){return u&&u.email&&u.email.toLowerCase().trim()===(email||'').toLowerCase().trim();});
+      if(f){ if(nome)f.nome=nome; } else { arr.push({email:email,nome:nome,addedAt:Date.now()}); }
+      if(data.__config.delUsers) delete data.__config.delUsers[(email||'').toLowerCase().trim()];
+      save(); if(typeof cloudSave==='function'){try{cloudSave();}catch(_e){}} }catch(_e){}
+    renderAdminDashboard();
+  }, function(err){ if(btn&&!isReset){btn.disabled=false;btn.textContent='Criar acesso do técnico';} _adminMsg('Falha de conexão: '+((err&&err.message)||err),true); });
+}
+function criarAcessoTecnico(){
+  if(!isAdmin() && !window._adminUnlocked){ alert('Destrave o Painel com a senha de administrador.'); return; }
+  var email=((document.getElementById('addUsrEmail')||{}).value||'').trim().toLowerCase();
+  var nome=((document.getElementById('addUsrNome')||{}).value||'').trim();
+  var senha=((document.getElementById('addUsrSenha')||{}).value||'').trim();
+  if(!email||!nome){ _adminMsg('Preencha o e-mail e o nome do técnico.',true); return; }
+  if(senha && senha.length<6){ _adminMsg('A senha precisa de pelo menos 6 caracteres (ou deixe vazio para gerar).',true); return; }
+  _invocarCriarTecnico(email, nome, senha, false);
+}
+
+/* Lista as CONTAS reais (perfis) — fonte da verdade de quem tem acesso + nome p/ auditoria */
+function _carregarPerfis(){
+  var box=document.getElementById('admPerfisList'); if(!box) return;
+  if(!cloudInit()||!SB){ box.innerHTML='<div style="color:#ff8a8a;font-size:12px;text-align:center;padding:8px">Sem conexão.</div>'; return; }
+  SB.from('perfis').select('user_id,email,nome,papel').then(function(res){
+    if(res.error){ box.innerHTML='<div style="color:#ff8a8a;font-size:12px;text-align:center;padding:8px">Não foi possível ler as contas: '+esc(res.error.message)+'</div>'; return; }
+    var arr=(res.data||[]).slice().sort(function(a,b){ if(a.papel!==b.papel) return a.papel==='admin'?-1:1; return (a.email||'').localeCompare(b.email||''); });
+    window._perfisCache=arr;
+    if(!arr.length){ box.innerHTML='<div style="color:#8aa88a;font-size:12px;text-align:center;padding:8px">Nenhuma conta ainda. Crie a primeira abaixo.</div>'; return; }
+    box.innerHTML=arr.map(function(p,i){
+      var isAdm=p.papel==='admin';
+      var badge='<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 6px;border-radius:6px;'+(isAdm?'background:#3a2a0c;color:#ffce5a;border:1px solid #6b531b':'background:#0f2a1a;color:#37d684;border:1px solid #245a36')+'">'+(isAdm?'ADMIN':'TÉCNICO')+'</span>';
+      return '<div style="border-bottom:1px solid #1f2c22;padding:8px 0">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-size:12px;color:#cfe0d4;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.email)+'</div>'+badge+'</div>'+
+        '<div style="display:flex;gap:6px;margin-top:6px">'+
+          '<input id="pf_'+i+'" class="delpwd-inp" style="padding:7px;font-size:12px;flex:1" type="text" value="'+esc(p.nome||'')+'" placeholder="Nome completo (auditoria)">'+
+          '<button onclick="salvarNomePerfil('+i+')" style="background:#1f5a2a;color:#eafaea;border:none;border-radius:7px;padding:0 12px;font-size:12px;font-weight:700;cursor:pointer">Salvar nome</button>'+
+        '</div>'+
+        (isAdm?'':'<button onclick="redefinirSenhaTecnico('+i+')" style="background:transparent;color:#8a9f90;border:none;padding:5px 0 0;font-size:10px;cursor:pointer;text-decoration:underline">redefinir senha deste técnico</button>')+
+      '</div>';
+    }).join('');
+  }, function(){ box.innerHTML='<div style="color:#ff8a8a;font-size:12px;text-align:center;padding:8px">Falha de conexão ao ler contas.</div>'; });
+}
+/* Salva o NOME no perfil (RLS permite admin) — sem mexer na senha, sem republicar nada */
+function salvarNomePerfil(i){
+  var p=(window._perfisCache||[])[i]; if(!p||!SB) return;
+  var inp=document.getElementById('pf_'+i); var nome=inp?inp.value.trim():'';
+  if(inp) inp.disabled=true;
+  SB.from('perfis').update({nome:nome}).eq('user_id',p.user_id).then(function(res){
+    if(inp) inp.disabled=false;
+    if(res.error){ if(typeof _stxToast==='function')_stxToast('Erro ao salvar nome: '+res.error.message); return; }
+    p.nome=nome;
+    try{ ensureConfig(); var arr=data.__config.allowedUsers||(data.__config.allowedUsers=[]);
+      var f=arr.find(function(u){return u&&u.email&&u.email.toLowerCase().trim()===(p.email||'').toLowerCase().trim();});
+      if(f){ f.nome=nome; } else { arr.push({email:p.email,nome:nome,addedAt:Date.now()}); }
+      save(); if(typeof cloudSave==='function'){try{cloudSave();}catch(_e){}} }catch(_e){}
+    if(typeof _stxToast==='function') _stxToast('Nome salvo: '+(nome||'(vazio)'));
+  }, function(){ if(inp) inp.disabled=false; if(typeof _stxToast==='function')_stxToast('Falha de conexão.'); });
+}
+/* Gera nova senha p/ um técnico existente (mostra para repassar) */
+function redefinirSenhaTecnico(i){
+  var p=(window._perfisCache||[])[i]; if(!p) return;
+  if(!confirm('Redefinir a senha de '+(p.nome||p.email)+'?\nSerá gerada uma senha nova para você repassar.')) return;
+  var inp=document.getElementById('pf_'+i); var nome=inp?inp.value.trim():(p.nome||'');
+  _invocarCriarTecnico(p.email, nome, '', true);
 }
 
 function addAllowedUser(){
